@@ -1,10 +1,15 @@
 import TitleScreen from './components/TitleScreen'
+import MatchingModal from './MatchingModal'
+import { useState } from 'react'
 import './App.css'
 
 function App() {
+  const [matching, setMatching] = useState(false)
+
   return (
     <div className="App">
-      <TitleScreen /> {/* 오징어 게임 시작 화면 */}
+      <TitleScreen onStartGame={() => setMatching(true)} />
+      <MatchingModal open={matching} onCancel={() => setMatching(false)} />
     </div>
   )
 }

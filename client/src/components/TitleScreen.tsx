@@ -206,8 +206,11 @@ class SquidGameTitleScene extends Phaser.Scene {
   }
 }
 
-// React 컴포넌트
-const TitleScreen: React.FC = () => {
+type TitleScreenProps = {
+  onStartGame: () => void
+}
+
+const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
   const gameRef = useRef<HTMLDivElement>(null)
   const gameInstance = useRef<Phaser.Game | null>(null)
   const [showStartButton, setShowStartButton] = useState(false)
@@ -244,14 +247,12 @@ const TitleScreen: React.FC = () => {
   }, [])
 
   const handleStartGame = () => {
-    alert('게임이 시작됩니다! 🦑')
-    // 여기에 실제 게임 시작 로직 추가
+    onStartGame()
   }
 
   return (
     <div className="title-screen">
       <div ref={gameRef} className="game-container" />
-      
       {showStartButton && (
         <div className="start-button-container">
           <button 
