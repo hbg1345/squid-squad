@@ -27,7 +27,7 @@ class SquidGameTitleScene extends Phaser.Scene {
 
     shapes.forEach((shape, index) => {
       const graphics = this.add.graphics()
-      graphics.lineStyle(6, 0x00ff00, 1) // 초록색 선
+      graphics.lineStyle(6, 0xffffff, 1);  // 선 두께, 색, 불투명도 
       
       switch (shape.type) {
         case 'circle':
@@ -75,8 +75,8 @@ class SquidGameTitleScene extends Phaser.Scene {
     }
 
     const shape = this.shapes[shapeIndex]
-    const targetX = 400 + (shapeIndex - 1) * 120
-    const targetY = 200
+    const targetX = this.scale.width / 2 + (shapeIndex - 1) * 120;
+    const targetY = this.scale.height / 2 - 100;
 
     // 도형을 목표 위치로 이동
     this.tweens.add({
