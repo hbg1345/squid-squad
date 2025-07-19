@@ -4,7 +4,7 @@ import './App.css'
 function App() {
   return (
     <div className="App">
-      <TitleScreen />
+      <TitleScreen /> {/* 오징어 게임 시작 화면 */}
     </div>
   )
 }
