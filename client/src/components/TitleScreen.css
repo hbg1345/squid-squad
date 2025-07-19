@@ -1,0 +1,52 @@
+.title-screen {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  background: #000000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.game-container {
+  width: 800px;
+  height: 600px;
+  border: 2px solid #333;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.start-button-container {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+.start-button {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+  color: white;
+  border: none;
+  padding: 25px 50px;
+  font-size: 28px;
+  font-weight: bold;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 15px 40px rgba(255, 107, 107, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  font-family: 'Arial', sans-serif;
+}
+
+.start-button:hover {
+  transform: translateX(-50%) translateY(-8px);
+  box-shadow: 0 20px 50px rgba(255, 107, 107, 0.5);
+  background: linear-gradient(135deg, #ff5252 0%, #d63031 100%);
+}
+
+.start-button:active {
+  transform: translateX(-50%) translateY(-2px);
+  box-shadow: 0 10px 30px rgba(255, 107, 107, 0.3);
+} 
