@@ -6,7 +6,6 @@ import './TitleScreen.css'
 class SquidGameTitleScene extends Phaser.Scene {
   private shapes: Phaser.GameObjects.Graphics[] = []
   private titleText!: Phaser.GameObjects.Text
-  private currentShapeIndex = 0
   private drawingPath: { x: number; y: number }[] = []
   private pathIndex = 0
 
@@ -25,7 +24,7 @@ class SquidGameTitleScene extends Phaser.Scene {
       { type: 'square', x: 300, y: 100, size: 40 }
     ]
 
-    shapes.forEach((shape, index) => {
+    shapes.forEach((shape) => {
       const graphics = this.add.graphics()
       graphics.lineStyle(6, 0x00ff00, 1) // 초록색 선
       

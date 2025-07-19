@@ -1,4 +1,3 @@
-import React from 'react'
 import TitleScreen from './components/TitleScreen'
 import './App.css'
 
