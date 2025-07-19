@@ -36,3 +36,40 @@
     transform: rotate(360deg);
   }
 }
+
+.main-content {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.main-title {
+  font-size: 3rem;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 2px 16px #000, 0 0 32px #61dafb;
+  margin-bottom: 2.5rem;
+}
+.join-btn {
+  background: linear-gradient(90deg, #61dafb 0%, #007cf0 100%);
+  color: #fff;
+  border: none;
+  border-radius: 1.2rem;
+  padding: 1.1rem 3.5rem;
+  font-size: 1.5rem;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+  transition: background 0.2s, transform 0.1s;
+}
+.join-btn:hover:enabled {
+  background: linear-gradient(90deg, #007cf0 0%, #61dafb 100%);
+  transform: scale(1.04);
+}
+.join-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
