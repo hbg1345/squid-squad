@@ -271,21 +271,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
         }
     }
 
-    private lastInputState: { left: boolean, right: boolean, up: boolean, down: boolean } = { left: false, right: false, up: false, down: false };
-    private handleKeyInput() {
-        const input = {
-            left: this.cursors.left.isDown,
-            right: this.cursors.right.isDown,
-            up: this.cursors.up.isDown,
-            down: this.cursors.down.isDown
-        };
-        // 입력 상태가 바뀌었을 때만 emit
-        if (JSON.stringify(input) !== JSON.stringify(this.lastInputState)) {
-            this.socket.emit('playerInput', { roomId: this.roomId, input });
-            this.lastInputState = input;
-        }
-    }
-
     /** 플레이어가 토큰과 겹쳤을 때 호출 */
     private handleCollectToken: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
         player, token
