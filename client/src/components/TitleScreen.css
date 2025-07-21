@@ -6,14 +6,16 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  overflow: hidden; /* Ensure no scrollbars */
 }
 
 .game-container {
-  width: 800px;
-  height: 600px;
-  border: 2px solid #333;
-  border-radius: 10px;
-  overflow: hidden;
+  width: 800px; /* 초기 너비 */
+  height: 600px; /* 초기 높이 */
+  /* border: 2px solid #333; */
+  /* border-radius: 10px; */
+  /* overflow: hidden; */
+  /* Phaser.Scale.FIT 모드와 함께 작동하여 컨테이너 크기에 맞춰 조정됩니다. */
 }
 
 .start-button-container {
@@ -25,8 +27,8 @@
 }
 
 .start-button {
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-  color: white;
+  background: white;
+  color: #ff2a7f;
   border: none;
   padding: 25px 50px;
   font-size: 28px;
@@ -34,19 +36,43 @@
   border-radius: 50px;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 15px 40px rgba(255, 107, 107, 0.4);
   text-transform: uppercase;
   letter-spacing: 3px;
   font-family: 'Arial', sans-serif;
+  outline: none; /* 포커스 아웃라인 제거 */
 }
 
 .start-button:hover {
-  transform: translateX(-50%) translateY(-8px);
+  /* transform: translateX(-50%) translateY(-8px); 호버 시 약간 위로 이동 */
   box-shadow: 0 20px 50px rgba(255, 107, 107, 0.5);
-  background: linear-gradient(135deg, #ff5252 0%, #d63031 100%);
+  background: #ff2a7f;
+  color: white;
 }
 
 .start-button:active {
-  transform: translateX(-50%) translateY(-2px);
-  box-shadow: 0 10px 30px rgba(255, 107, 107, 0.3);
-} 
+  /* transform: translateX(-50%) translateY(-2px);  클릭 시 약간 아래로 눌리는 효과 */
+}
+
+/* 모바일 반응형 디자인 */
+@media (max-width: 768px) {
+  .game-container {
+      width: 95vw; /* 모바일에서는 화면 너비에 거의 맞춤 */
+      height: calc(95vw * 0.75); /* 4:3 비율 유지 (600/800 = 0.75) */
+  }
+
+  .start-button {
+      padding: 18px 35px;
+      font-size: 20px;
+      border-radius: 40px;
+      bottom: 50px; /* 모바일에서 버튼 위치 조정 */
+  }
+}
+
+@media (max-width: 480px) {
+  .start-button {
+      padding: 15px 30px;
+      font-size: 18px;
+      border-radius: 35px;
+      bottom: 30px;
+  }
+}
