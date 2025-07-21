@@ -11,11 +11,7 @@ let tokens = [];
 const TOKEN_KEYS = ['token1', 'token2'];
 let nextTokenId = 1;
 
-// Younghee(영희) 위치만 동기화
-let younghee = {
-  x: 360, // 중앙
-  y: 180
-};
+// 각 방별 Younghee(영희) 상태는 rooms[roomId].younghee로 관리
 
 function randomToken() {
   const token = {
@@ -37,19 +33,25 @@ function broadcastTokens() {
   io.emit('tokensUpdate', tokens);
 }
 
-function randomizeYoungheePosition() {
-  younghee.x = Math.floor(Math.random() * 1920);
-  younghee.y = Math.floor(Math.random() * 1080);
+function randomizeYoungheePosition(roomId) {
+  const room = rooms[roomId];
+  if (!room) return;
+  room.younghee.x = Math.floor(Math.random() * 1920);
+  room.younghee.y = Math.floor(Math.random() * 1080);
 }
 
-function broadcastYounghee() {
-  io.emit('youngheeUpdate', younghee);
+function broadcastYounghee(roomId) {
+  const room = rooms[roomId];
+  if (!room) return;
+  io.to(roomId).emit('youngheeUpdate', room.younghee);
 }
 
-// 5초마다 Younghee 위치 랜덤 변경 및 전체 브로드캐스트
+// 5초마다 각 방 Younghee 위치 랜덤 변경 및 브로드캐스트
 setInterval(() => {
-  randomizeYoungheePosition();
-  broadcastYounghee();
+  Object.keys(rooms).forEach(roomId => {
+    randomizeYoungheePosition(roomId);
+    broadcastYounghee(roomId);
+  });
 }, 5000);
 
 function broadcastGameState(roomId) {
@@ -82,12 +84,6 @@ io.on('connection', (socket) => {
     }
     broadcastGameState(roomId);
   });
-
-  // 클라이언트에 현재 토큰 정보 전송
-  socket.emit('tokensUpdate', tokens);
-
-  // 클라이언트에 현재 Younghee 위치 전송
-  socket.emit('youngheeUpdate', younghee);
 
   socket.on('playerInput', ({ roomId, input }) => {
     if (!rooms[roomId] || !rooms[roomId].playerInputs[socket.id]) return;
@@ -131,7 +127,7 @@ io.on('connection', (socket) => {
       if (waitingPlayers.length >= MATCH_SIZE) {
         const matched = waitingPlayers.splice(0, MATCH_SIZE);
         const roomId = `room${roomSeq++}`;
-        rooms[roomId] = { players: {}, tokens: [], created: Date.now() };
+        rooms[roomId] = { players: {}, tokens: [], created: Date.now(), younghee: { x: 360, y: 180 } };
         matched.forEach(s => {
           s.join(roomId);
           s.emit('matchFound', { roomId });

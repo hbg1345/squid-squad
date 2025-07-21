@@ -547,7 +547,12 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             {phase !== 'dead' && (
                 <div ref={gameRef} className="game-container" />
             )}
-            <AlphabetModal isOpen={showAlphabetModal} onClose={() => setShowAlphabetModal(false)} onSuccess={handleAlphabetSuccess} />
+            <AlphabetModal
+                isOpen={showAlphabetModal}
+                onClose={() => setShowAlphabetModal(false)}
+                onSuccess={handleAlphabetSuccess}
+                onFail={() => setPhase('dead')}
+            />
             {/* Back button */}
             <div className="back-button-container">
                 <button

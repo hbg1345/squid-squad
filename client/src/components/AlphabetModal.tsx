@@ -5,6 +5,7 @@ interface AlphabetModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  onFail?: () => void;
 }
 
 const ALPHABET_COUNT = 5;
@@ -21,7 +22,7 @@ function getRandomAlphabets(count: number) {
   return arr;
 }
 
-const AlphabetModal: React.FC<AlphabetModalProps> = ({ isOpen, onClose, onSuccess }) => {
+const AlphabetModal: React.FC<AlphabetModalProps> = ({ isOpen, onClose, onSuccess, onFail }) => {
   const [alphabets, setAlphabets] = useState<string[]>([]);
   const [solved, setSolved] = useState<boolean[]>([]);
   const [wrongIdx, setWrongIdx] = useState<number | null>(null);
@@ -74,10 +75,11 @@ const AlphabetModal: React.FC<AlphabetModalProps> = ({ isOpen, onClose, onSucces
     if (isOpen && time <= 0 && !failed && solved.some((v) => !v)) {
       setFailed(true);
       setTimeout(() => {
+        if (onFail) onFail();
         onClose();
       }, 400);
     }
-  }, [isOpen, time, failed, solved, onClose]);
+  }, [isOpen, time, failed, solved, onClose, onFail]);
 
   // 키보드 입력 처리
   const handleKeyDown = useCallback(

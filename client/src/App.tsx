@@ -8,7 +8,6 @@ const RedLightGreenLightGameWrapper = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { roomId, playerNickname } = location.state || {};
-  console.log('[LOG] RedLightGreenLightGameWrapper', roomId, playerNickname);
   return (
     <RedLightGreenLightGame
       roomId={roomId}
