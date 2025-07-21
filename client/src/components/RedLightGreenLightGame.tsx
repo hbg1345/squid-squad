@@ -263,6 +263,9 @@ class RedLightGreenLightScene extends Phaser.Scene {
         // 서버로 내 위치 전송
         this.socket.emit('playerMove', { x: mySprite.x, y: mySprite.y, nickname: this.playerNickname });
         console.log('[SOCKET] Emit playerMove (on update):', { x: mySprite.x, y: mySprite.y, nickname: this.playerNickname });
+
+        // 항상 토큰과의 충돌 체크
+        this.physics.overlap(mySprite, this.tokens, this.handleCollectToken, undefined, this);
     }
 
     /**
