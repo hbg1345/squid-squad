@@ -304,44 +304,15 @@ class RedLightGreenLightScene extends Phaser.Scene {
         // Sprite의 Y는 중앙이므로, 이미지 높이의 절반 위쪽으로 이동하여 눈 높이로 맞춤
         // 영희 이미지의 눈이 대략 이미지 상단에서 35% 지점에 있다고 가정하고 계산
         const eyeX = youngheeX;
-        const eyeY = youngheeY - (this.younghee.displayHeight / 2) + (this.younghee.displayHeight * 0.35); 
+        const eyeY = youngheeY - (this.younghee.displayHeight / 2) + (this.younghee.displayHeight * 0.35) + 40;
 
-        // 화면 대각선 길이 계산 -> 시야가 화면 전체를 덮을 수 있도록
-        const w = this.scale.width;
-        const h = this.scale.height;
-
-        // 3) 방향·각도·거리 가져오기
-        const angle     = this.visionAngle;
-        const dir       = this.visionDirection;
-        const distance  = Math.hypot(w, h);
-
-        // 4) 양쪽 경계점 계산
-        const leftRad  = Phaser.Math.DegToRad(dir - angle/2);
-        const rightRad = Phaser.Math.DegToRad(dir + angle/2);
-
-        const leftX  = eyeX + distance * Math.cos(leftRad);
-        const leftY  = eyeY + distance * Math.sin(leftRad);
-        const rightX = eyeX + distance * Math.cos(rightRad);
-        const rightY = eyeY + distance * Math.sin(rightRad);
-        
-        
-        // 5) 반투명 콘 채우기
+        // 원형 시야 그리기 (싱글플레이 방식)
         this.youngheeVisionGraphics
-          .fillStyle(0xD5F2FF, 1)
-          .beginPath()
-          .moveTo(eyeX, eyeY)
-          .lineTo(leftX, leftY)
-          .lineTo(rightX, rightY)
-          .closePath()
-          .fill();
+            .fillStyle(0xD5F2FF, 0.6)
+            .fillCircle(eyeX, eyeY, this.visionDistance);
 
-         // 6) 테두리 선 그리기
-         this.youngheeVisionLineGraphics
-          .clear()
-          .lineStyle(2, 0x000000, 0.6)
-          .beginPath()
-          .moveTo(eyeX, eyeY)
-          .strokePath();
+        this.youngheeVisionLineGraphics
+            .strokeCircle(eyeX, eyeY, this.visionDistance);
 
         this.children.bringToTop(this.younghee);
     }
