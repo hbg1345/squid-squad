@@ -15,6 +15,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
     private playerNameTexts: Map<string, Phaser.GameObjects.Text> = new Map();
     private myId: string = '';
     private playerNickname: string = '';
+    private youngheeListenerRegistered = false;
 
     private visionAngle: number     = 60;   // 콘의 벌어짐 각도 (°)
     private visionDirection: number = 270;  // 시야가 향하는 기본 방향 (°)
@@ -60,6 +61,14 @@ class RedLightGreenLightScene extends Phaser.Scene {
      * Called once when the scene is created and ready to be displayed.
      */
     create() {
+        // 소켓이 없으면 새로 연결
+        if (!this.socket) {
+            this.socket = io('http://localhost:3001');
+            this.socket.on('connect', () => {
+                this.myId = this.socket.id ?? '';
+                console.log('[SOCKET] Connected! myId:', this.myId);
+            });
+        }
         console.log('[PHASER] create() called');
         // Set a light grey background color as in the image
         this.cameras.main.setBackgroundColor('#F0F0F0');
@@ -79,7 +88,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
 
         // 영희 이미지를 사용하여 Sprite 생성
         this.younghee = this.add.sprite(initialYoungheeX, initialYoungheeY, 'younghee');
-        // 이미지의 원본 해상도에 따라 이 값을 조정하여 원하는 크기를 만드세요.
         this.younghee.setScale(0.5); // 영희 이미지 크기 조정
         this.younghee.setOrigin(0.5, 0.5); // 이미지의 중앙을 기준으로 설정 (기본값)
 
@@ -90,38 +98,31 @@ class RedLightGreenLightScene extends Phaser.Scene {
         // 영희 최소 시야 그리기 
         this.drawYoungheeVision(this.younghee.x, this.younghee.y);
 
-        // 영희 이동하는 시간 설정 
-        this.youngheeMoveTimer = this.time.addEvent({
-            delay: 5000, // 5 seconds
-            callback: this.moveYounghee,
-            callbackScope: this,
-            loop: true
-        });
 
-        // 4. User's Character (Player)
-        // Initial player position (bottom center)
-        const initialPlayerX = this.scale.width / 2;
-        const initialPlayerY = this.scale.height - 100;
-
-        // Socket.io 연결
-        this.socket = io('http://localhost:3001');
-        this.socket.on('connect', () => {
-            this.myId = this.socket.id ?? '';
-            console.log('[SOCKET] Connected! myId:', this.myId);
-            this.socket.emit('playerMove', { x: 100, y: 100, nickname: this.playerNickname });
-            console.log('[SOCKET] Emit playerMove (on connect):', { x: 100, y: 100, nickname: this.playerNickname });
-        });
-        this.socket.on('gameState', ({ players }) => {
-            console.log('[SOCKET] Received gameState:', players, 'myId:', this.myId);
-            // 내 id가 players에 없으면, Object.keys(players)[0]을 myId로 임시 할당(테스트용)
-            if (!this.myId || !players[this.myId]) {
-                this.myId = Object.keys(players)[0] || '';
-                console.log('[SOCKET] myId fallback:', this.myId);
-            }
+        // 서버에서 영희 위치 동기화 받기 (중복 등록 방지)
+        if (!this.youngheeListenerRegistered) {
+            this.socket.on('youngheeUpdate', (data: { x: number, y: number }) => {
+                console.log('[SOCKET] youngheeUpdate', data);
+                if (this.younghee) {
+                    this.younghee.setPosition(data.x, data.y);
+                    this.drawYoungheeVision(data.x, data.y);
+                }
+            });
+            this.youngheeListenerRegistered = true;
+        }
+        this.socket.on('gameState', (data) => {
+            console.log('[SOCKET] gameState', data);
+            console.log('[DEBUG] myId:', this.myId, typeof this.myId);
+            Object.keys(data.players).forEach(id => {
+                console.log('[DEBUG] players id:', id, typeof id);
+                if (id === this.myId) {
+                    console.log('[DEBUG] id matches myId!');
+                }
+            });
             // 1. 없는 플레이어 생성
-            Object.entries(players).forEach(([id, info]: [string, any]) => {
+            Object.entries(data.players).forEach(([id, info]: [string, any]) => {
                 if (!this.players.has(id)) {
-                    console.log('[PHASER] Creating sprite for player:', id, info);
+                    console.log('[PHASER] Creating sprite for player:', id, 'myId at creation:', this.myId, typeof id, typeof this.myId);
                     const sprite = this.physics.add.sprite(info.x, info.y, 'player')
                         .setScale(0.5)
                         .setOrigin(0.5, 0.5);
@@ -143,7 +144,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
                 }
             });
             // 2. 위치 갱신
-            Object.entries(players).forEach(([id, info]: [string, any]) => {
+            Object.entries(data.players).forEach(([id, info]: [string, any]) => {
                 const sprite = this.players.get(id);
                 const nameText = this.playerNameTexts.get(id);
                 if (sprite) {
@@ -160,7 +161,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
             });
             // 3. 사라진 플레이어 제거
             Array.from(this.players.keys()).forEach((id) => {
-                if (!players[id]) {
+                if (!data.players[id]) {
                     console.log('[PHASER] Removing sprite for player:', id);
                     this.players.get(id)?.destroy();
                     this.playerNameTexts.get(id)?.destroy();
@@ -168,6 +169,21 @@ class RedLightGreenLightScene extends Phaser.Scene {
                     this.playerNameTexts.delete(id);
                 }
             });
+        });
+        this.socket.on('tokensUpdate', (data) => {
+            console.log('[SOCKET] tokensUpdate', data);
+          // 기존 토큰 모두 제거
+          this.tokens.clear(true, true);
+          // 서버에서 받은 토큰만 다시 생성
+          data.forEach((token: any) => {
+            const t = this.physics.add.sprite(token.x, token.y, token.key)
+              .setScale(0.3)
+              .setOrigin(0.5);
+            t.setData('id', token.id);
+            t.body.setCircle(16);
+            t.body.setOffset(t.displayWidth/2 - 16, t.displayHeight/2 - 16);
+            this.tokens.add(t);
+          });
         });
 
         // Keyboard input setup
@@ -236,8 +252,12 @@ class RedLightGreenLightScene extends Phaser.Scene {
      * @param delta - The time elapsed since the last frame.
      */
     update(time: number, delta: number) {
+        if (!this.myId) {
+            return;
+        }
         // 내 플레이어만 입력 처리
         const mySprite = this.players.get(this.myId);
+        console.log('[PHASER] update() myId:', this.myId, typeof this.myId, 'players:', Array.from(this.players.keys()));
         if (!mySprite || !this.cursors) {
             console.log('[PHASER] update() - mySprite missing for myId:', this.myId, 'players:', Array.from(this.players.keys()));
             return;
@@ -268,36 +288,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
         this.physics.overlap(mySprite, this.tokens, this.handleCollectToken, undefined, this);
     }
 
-    /**
-     * Moves Younghee to a new random position within the screen,
-     * making her disappear and reappear, along with her vision.
-     */
-    private moveYounghee() {
-        // 영희 & 시야 숨기기 
-        this.younghee.setVisible(false);
-        this.youngheeVisionGraphics.setVisible(false);
-        this.youngheeVisionLineGraphics.setVisible(false);
-
-        // Generate new random position within screen bounds, avoiding edges
-        // 영희가 화면 위쪽에만 나타나도록 Y 좌표 범위 설정
-        const newX = Phaser.Math.Between(100, this.scale.width - 100);
-        const newY = Phaser.Math.Between(150, this.scale.height / 2 - 50); 
-
-        // 시야 파라미터 랜덤화
-        this.visionAngle     = Phaser.Math.Between(50, 110);   // 50°~110°
-        this.visionDirection = Phaser.Math.Between(0, 360); // 전체 360°에서 랜덤하게 
-        this.visionDistance  = Phaser.Math.Between(300, 800); // 300px~800px
-
-        // 딜레이 후 영희 & 시야 재등장 
-        this.time.delayedCall(200, () => { // 200ms for "뿅!" effect
-          this.younghee.setPosition(newX, newY).setVisible(true);
-
-          this.youngheeVisionGraphics.setVisible(true);
-          this.youngheeVisionLineGraphics.setVisible(true);
-
-          this.drawYoungheeVision(newX, newY);
-        }, [], this);
-    }
+    // moveYounghee 제거 (서버 동기화로 대체)
 
     /**
      * Draws Younghee's vision cone and lines.

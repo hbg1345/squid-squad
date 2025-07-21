@@ -10,6 +10,12 @@ const TOKEN_KEYS = ['token1', 'token2'];
 const MAX_TOKENS = 20;
 let nextTokenId = 1;
 
+// Younghee(영희) 위치만 동기화
+let younghee = {
+  x: 360, // 중앙
+  y: 180
+};
+
 function randomToken() {
   return {
     id: nextTokenId++,
@@ -29,9 +35,25 @@ function broadcastTokens() {
   io.emit('tokensUpdate', tokens);
 }
 
+function randomizeYoungheePosition() {
+  younghee.x = Math.floor(Math.random() * 520) + 100; // 100~620
+  younghee.y = Math.floor(Math.random() * 120) + 150; // 150~270
+}
+
+function broadcastYounghee() {
+  io.emit('youngheeUpdate', younghee);
+}
+
+// 5초마다 Younghee 위치 랜덤 변경 및 전체 브로드캐스트
+setInterval(() => {
+  randomizeYoungheePosition();
+  broadcastYounghee();
+}, 5000);
+
 function broadcastGameState() {
   io.emit('gameState', { players });
   broadcastTokens();
+  // youngheeUpdate emit 제거 (setInterval과 on connect에서만 emit)
 }
 
 io.on('connection', (socket) => {
@@ -41,6 +63,9 @@ io.on('connection', (socket) => {
 
   // 클라이언트에 현재 토큰 정보 전송
   socket.emit('tokensUpdate', tokens);
+
+  // 클라이언트에 현재 Younghee 위치 전송
+  socket.emit('youngheeUpdate', younghee);
 
   socket.on('playerMove', (data) => {
     if (players[socket.id]) {
