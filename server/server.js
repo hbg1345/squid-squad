@@ -24,7 +24,6 @@ function randomToken() {
     x: Math.floor(Math.random() * 1920),
     y: Math.floor(Math.random() * 1080),
   };
-  console.log('[SERVER] randomToken created:', token);
   return token;
 }
 
@@ -56,10 +55,8 @@ setInterval(() => {
 function broadcastGameState(roomId) {
   const room = rooms[roomId];
   if (!room) return;
-  // console.log(`[SERVER] broadcastGameState to ${roomId}, players:`, Object.keys(room.players));
   io.to(roomId).emit('gameState', { players: room.players });
   io.to(roomId).emit('tokensUpdate', room.tokens);
-  console.log(`[SERVER] broadcastGameState: tokensUpdate for room ${roomId}:`, room.tokens);
 }
 
 let playerInputs = {};
@@ -81,11 +78,8 @@ io.on('connection', (socket) => {
       while (rooms[roomId].tokens.length < MAX_TOKENS) {
         const newToken = randomToken();
         rooms[roomId].tokens.push(newToken);
-        console.log(`[SERVER] Token added to room ${roomId}:`, newToken);
       }
-      console.log(`[SERVER] Room ${roomId} tokens after creation:`, rooms[roomId].tokens);
     }
-    console.log(`[SERVER] joinGame: roomId=${roomId}, nickname=${nickname}, socketId=${socket.id}`);
     broadcastGameState(roomId);
   });
 
@@ -118,11 +112,8 @@ io.on('connection', (socket) => {
       while (rooms[roomId].tokens.length < MAX_TOKENS) {
         const newToken = randomToken();
         rooms[roomId].tokens.push(newToken);
-        console.log(`[SERVER] Token replenished in room ${roomId}:`, newToken);
       }
-      console.log(`[SERVER] Room ${roomId} tokens after replenish:`, rooms[roomId].tokens);
       io.to(roomId).emit('tokensUpdate', rooms[roomId].tokens);
-      console.log(`[SERVER] tokensUpdate emitted for room ${roomId}:`, rooms[roomId].tokens);
     }
   });
 
@@ -185,6 +176,4 @@ setInterval(() => {
   });
 }, 1000/60);
 
-server.listen(process.env.PORT || 3001, () => {
-  console.log(`Socket.io server running on port ${process.env.PORT || 3001}`);
-}); 
+server.listen(process.env.PORT || 3001); 
