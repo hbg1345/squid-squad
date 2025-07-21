@@ -359,10 +359,12 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     useEffect(() => {
         if (gameRef.current && !gameInstance.current) {
             console.log('[REACT] Creating Phaser.Game instance');
+            const width = window.innerWidth;
+            const height = window.innerHeight;
             const config: Phaser.Types.Core.GameConfig = {
                 type: Phaser.AUTO,
-                width: 720, 
-                height: 540, 
+                width,
+                height,
                 parent: gameRef.current,
                 backgroundColor: '#F0F0F0',
                 scale: {

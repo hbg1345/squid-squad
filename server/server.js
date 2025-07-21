@@ -20,8 +20,8 @@ function randomToken() {
   return {
     id: nextTokenId++,
     key: TOKEN_KEYS[Math.floor(Math.random() * TOKEN_KEYS.length)],
-    x: Math.floor(Math.random() * 600) + 50,
-    y: Math.floor(Math.random() * 400) + 100,
+    x: Math.floor(Math.random() * 1920),
+    y: Math.floor(Math.random() * 1080),
   };
 }
 
@@ -36,8 +36,8 @@ function broadcastTokens() {
 }
 
 function randomizeYoungheePosition() {
-  younghee.x = Math.floor(Math.random() * 520) + 100; // 100~620
-  younghee.y = Math.floor(Math.random() * 120) + 150; // 150~270
+  younghee.x = Math.floor(Math.random() * 1920);
+  younghee.y = Math.floor(Math.random() * 1080);
 }
 
 function broadcastYounghee() {
