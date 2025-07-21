@@ -57,8 +57,12 @@ function broadcastGameState() {
   // youngheeUpdate emit 제거 (setInterval과 on connect에서만 emit)
 }
 
+let playerInputs = {};
+const PLAYER_SPEED = 500 / 60; // 500px/sec, 60fps 기준 프레임당 이동량
+
 io.on('connection', (socket) => {
   players[socket.id] = { x: 100, y: 100, nickname: `플레이어${socket.id.slice(-4)}` };
+  playerInputs[socket.id] = { left: false, right: false, up: false, down: false };
   spawnTokensIfNeeded();
   broadcastGameState();
 
@@ -67,6 +71,11 @@ io.on('connection', (socket) => {
 
   // 클라이언트에 현재 Younghee 위치 전송
   socket.emit('youngheeUpdate', younghee);
+
+  socket.on('playerInput', (input) => {
+    playerInputs[socket.id] = input;
+    // console.log(`[INPUT] ${socket.id}:`, input); // 로그 제거
+  });
 
   socket.on('playerMove', (data) => {
     if (players[socket.id]) {
@@ -90,9 +99,30 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     delete players[socket.id];
+    delete playerInputs[socket.id];
     broadcastGameState();
   });
 });
+
+// 60fps 기준으로 위치 계산 및 broadcast
+setInterval(() => {
+  for (const id in players) {
+    const input = playerInputs[id] || {};
+    let dx = 0, dy = 0;
+    if (input.left) dx -= PLAYER_SPEED;
+    if (input.right) dx += PLAYER_SPEED;
+    if (input.up) dy -= PLAYER_SPEED;
+    if (input.down) dy += PLAYER_SPEED;
+    const oldX = players[id].x;
+    const oldY = players[id].y;
+    players[id].x = Math.max(20, Math.min(1920 - 20, players[id].x + dx));
+    players[id].y = Math.max(20, Math.min(1080 - 20, players[id].y + dy));
+    if (dx !== 0 || dy !== 0) {
+      // console.log(`[MOVE] ${id}: (${oldX}, ${oldY}) -> (${players[id].x}, ${players[id].y})`); // 로그 제거
+    }
+  }
+  broadcastGameState();
+}, 1000/60);
 
 server.listen(process.env.PORT || 3001, () => {
   console.log(`Socket.io server running on port ${process.env.PORT || 3001}`);

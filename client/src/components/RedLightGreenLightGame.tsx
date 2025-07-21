@@ -53,7 +53,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
         // Phaser에서 scene.start로 전달된 데이터는 this.sys.settings.data에 있음
         const nickname = data?.playerNickname || ((this.sys.settings.data as { playerNickname?: string })?.playerNickname) || '';
         this.playerNickname = nickname;
-        console.log('[PHASER] init() called, playerNickname:', this.playerNickname);
     }
 
     /**
@@ -76,10 +75,8 @@ class RedLightGreenLightScene extends Phaser.Scene {
             this.socket = io(import.meta.env.VITE_SOCKET_URL);
             this.socket.on('connect', () => {
                 this.myId = this.socket.id ?? '';
-                console.log('[SOCKET] Connected! myId:', this.myId);
             });
         }
-        console.log('[PHASER] create() called');
         // Set a light grey background color as in the image
         this.cameras.main.setBackgroundColor('#F0F0F0');
 
@@ -112,7 +109,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
         // 서버에서 영희 위치 동기화 받기 (중복 등록 방지)
         if (!this.youngheeListenerRegistered) {
             this.socket.on('youngheeUpdate', (data: { x: number, y: number }) => {
-                console.log('[SOCKET] youngheeUpdate', data);
                 if (this.younghee) {
                     this.younghee.setPosition(data.x, data.y);
                     this.drawYoungheeVision(data.x, data.y);
@@ -121,18 +117,9 @@ class RedLightGreenLightScene extends Phaser.Scene {
             this.youngheeListenerRegistered = true;
         }
         this.socket.on('gameState', (data) => {
-            console.log('[SOCKET] gameState', data);
-            console.log('[DEBUG] myId:', this.myId, typeof this.myId);
-            Object.keys(data.players).forEach(id => {
-                console.log('[DEBUG] players id:', id, typeof id);
-                if (id === this.myId) {
-                    console.log('[DEBUG] id matches myId!');
-                }
-            });
             // 1. 없는 플레이어 생성
             Object.entries(data.players).forEach(([id, info]: [string, any]) => {
                 if (!this.players.has(id)) {
-                    console.log('[PHASER] Creating sprite for player:', id, 'myId at creation:', this.myId, typeof id, typeof this.myId);
                     const sprite = this.physics.add.sprite(info.x, info.y, 'player')
                         .setScale(0.5)
                         .setOrigin(0.5, 0.5);
@@ -158,12 +145,9 @@ class RedLightGreenLightScene extends Phaser.Scene {
                 const sprite = this.players.get(id);
                 const nameText = this.playerNameTexts.get(id);
                 if (sprite) {
-                    // 내 플레이어는 서버 좌표로 덮어쓰지 않는다!
-                    if (id !== this.myId) {
-                        sprite.x = info.x;
-                        sprite.y = info.y;
-                        console.log('[PHASER] Updating sprite position for', id, 'to', info.x, info.y);
-                    }
+                    // 내 플레이어도 서버 좌표로 이동시킴
+                    sprite.x = info.x;
+                    sprite.y = info.y;
                 }
                 if (nameText && sprite) {
                     nameText.setPosition(sprite.x, sprite.y - 30);
@@ -172,7 +156,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
             // 3. 사라진 플레이어 제거
             Array.from(this.players.keys()).forEach((id) => {
                 if (!data.players[id]) {
-                    console.log('[PHASER] Removing sprite for player:', id);
                     this.players.get(id)?.destroy();
                     this.playerNameTexts.get(id)?.destroy();
                     this.players.delete(id);
@@ -181,7 +164,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
             });
         });
         this.socket.on('tokensUpdate', (data) => {
-            console.log('[SOCKET] tokensUpdate', data);
           // 기존 토큰 모두 제거
           this.tokens.clear(true, true);
           // 서버에서 받은 토큰만 다시 생성
@@ -198,6 +180,10 @@ class RedLightGreenLightScene extends Phaser.Scene {
 
         // Keyboard input setup
         this.cursors = this.input.keyboard!.createCursorKeys();
+        // 키 입력 상태 추적용
+        this.lastInputState = { left: false, right: false, up: false, down: false };
+        this.input.keyboard!.on('keydown', this.handleKeyInput, this);
+        this.input.keyboard!.on('keyup', this.handleKeyInput, this);
 
         //tokens
         // 토큰 개수 표시 ui
@@ -239,6 +225,21 @@ class RedLightGreenLightScene extends Phaser.Scene {
         }
     }
 
+    private lastInputState: { left: boolean, right: boolean, up: boolean, down: boolean } = { left: false, right: false, up: false, down: false };
+    private handleKeyInput() {
+        const input = {
+            left: this.cursors.left.isDown,
+            right: this.cursors.right.isDown,
+            up: this.cursors.up.isDown,
+            down: this.cursors.down.isDown
+        };
+        // 입력 상태가 바뀌었을 때만 emit
+        if (JSON.stringify(input) !== JSON.stringify(this.lastInputState)) {
+            this.socket.emit('playerInput', input);
+            this.lastInputState = input;
+        }
+    }
+
     /** 플레이어가 토큰과 겹쳤을 때 호출 */
     private handleCollectToken: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
       player,
@@ -262,39 +263,22 @@ class RedLightGreenLightScene extends Phaser.Scene {
      * @param delta - The time elapsed since the last frame.
      */
     update(time: number, delta: number) {
-        if (!this.myId) {
-            return;
-        }
-        // 내 플레이어만 입력 처리
+        if (!this.myId) return;
         const mySprite = this.players.get(this.myId);
-        console.log('[PHASER] update() myId:', this.myId, typeof this.myId, 'players:', Array.from(this.players.keys()));
-        if (!mySprite || !this.cursors) {
-            console.log('[PHASER] update() - mySprite missing for myId:', this.myId, 'players:', Array.from(this.players.keys()));
-            return;
+        if (!mySprite) return;
+        // 입력 상태 체크 및 emit
+        const input = {
+            left: this.cursors.left.isDown,
+            right: this.cursors.right.isDown,
+            up: this.cursors.up.isDown,
+            down: this.cursors.down.isDown
+        };
+        // 키 입력 상태 콘솔 출력 제거
+        if (JSON.stringify(input) !== JSON.stringify(this.lastInputState)) {
+            this.socket.emit('playerInput', input);
+            this.lastInputState = { ...input };
         }
-        let playerVelocityX = 0;
-        let playerVelocityY = 0;
-        if (this.cursors.left.isDown) {
-            playerVelocityX = -this.playerSpeed;
-        } else if (this.cursors.right.isDown) {
-            playerVelocityX = this.playerSpeed;
-        }
-        if (this.cursors.up.isDown) {
-            playerVelocityY = -this.playerSpeed;
-        } else if (this.cursors.down.isDown) {
-            playerVelocityY = this.playerSpeed;
-        }
-        if (mySprite.body && 'setVelocity' in mySprite.body) {
-            (mySprite.body as Phaser.Physics.Arcade.Body).setVelocity(playerVelocityX, playerVelocityY);
-        }
-        mySprite.x = Phaser.Math.Clamp(mySprite.x, 20, this.scale.width - 20);
-        mySprite.y = Phaser.Math.Clamp(mySprite.y, 20, this.scale.height - 20);
         this.playerNameTexts.get(this.myId)?.setPosition(mySprite.x, mySprite.y - 30);
-        // 서버로 내 위치 전송
-        this.socket.emit('playerMove', { x: mySprite.x, y: mySprite.y, nickname: this.playerNickname });
-        console.log('[SOCKET] Emit playerMove (on update):', { x: mySprite.x, y: mySprite.y, nickname: this.playerNickname });
-
-        // 항상 토큰과의 충돌 체크
         this.physics.overlap(mySprite, this.tokens, this.handleCollectToken, undefined, this);
     }
 
@@ -338,6 +322,10 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     const gameInstance = useRef<Phaser.Game | null>(null);
 
     useEffect(() => {
+        if (gameRef.current) {
+            gameRef.current.tabIndex = 0;
+            gameRef.current.focus();
+        }
         if (gameRef.current && !gameInstance.current) {
             console.log('[REACT] Creating Phaser.Game instance');
             const width = window.innerWidth;
