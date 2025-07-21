@@ -64,10 +64,12 @@ let waitingPlayers = [];
 const MATCH_SIZE = 2;
 
 io.on('connection', (socket) => {
-  players[socket.id] = { x: 100, y: 100, nickname: `플레이어${socket.id.slice(-4)}` };
-  playerInputs[socket.id] = { left: false, right: false, up: false, down: false };
-  spawnTokensIfNeeded();
-  broadcastGameState();
+  socket.on('joinGame', (data) => {
+    players[socket.id] = { x: 100, y: 100, nickname: data.nickname };
+    playerInputs[socket.id] = { left: false, right: false, up: false, down: false };
+    spawnTokensIfNeeded();
+    broadcastGameState();
+  });
 
   // 클라이언트에 현재 토큰 정보 전송
   socket.emit('tokensUpdate', tokens);

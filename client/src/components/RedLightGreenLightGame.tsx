@@ -70,8 +70,9 @@ class RedLightGreenLightScene extends Phaser.Scene {
      * Called once when the scene is created and ready to be displayed.
      */
     create() {
-        // 소켓이 없으면 새로 연결
         this.myId = this.socket.id ?? '';
+        // 게임 입장 시 서버에 joinGame 이벤트 전송
+        this.socket.emit('joinGame', { nickname: this.playerNickname });
         // Set a light grey background color as in the image
         this.cameras.main.setBackgroundColor('#F0F0F0');
 
