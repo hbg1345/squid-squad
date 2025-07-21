@@ -57,7 +57,7 @@ function broadcastGameState() {
 }
 
 io.on('connection', (socket) => {
-  players[socket.id] = { x: 100, y: 100, nickname: `플레이어${socket.id.slice(-4)}` };
+  players[socket.id] = { x: 100, y: 100, nickname: 플레이어${socket.id.slice(-4)} };
   spawnTokensIfNeeded();
   broadcastGameState();
 
@@ -91,6 +91,15 @@ io.on('connection', (socket) => {
     delete players[socket.id];
     broadcastGameState();
   });
+
+  socket.on('playerPush', (data: { id, dx, dy}) => {
+    if (pushed[id]) {
+      pushed[id].x += dx;
+      pushed[id].y += dy;
+      io.emit('playerPush', { id, dx, dy });
+    }
+  });
+  
 });
 
 server.listen(3001, () => {

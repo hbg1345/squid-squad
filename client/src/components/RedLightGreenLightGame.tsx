@@ -31,6 +31,11 @@ class RedLightGreenLightScene extends Phaser.Scene {
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
     private playerSpeed: number = 500;
 
+    // 충돌 처리
+    private pushKey!: Phaser.Input.Keyboard.Key;
+    private pushRadius: number = 600; // 푸쉬 반경 (px)
+    private pushStrength: number = 300; // 푸쉬 강도 (px/s) 
+
     constructor() {
         super({ key: 'RedLightGreenLightScene' });
     }
@@ -126,20 +131,17 @@ class RedLightGreenLightScene extends Phaser.Scene {
                     const sprite = this.physics.add.sprite(info.x, info.y, 'player')
                         .setScale(0.5)
                         .setOrigin(0.5, 0.5);
-                    const pr = 20;
+                    const pr = sprite.displayWidth * 0.7; //player 충돌체의 반지름 
                     sprite.body.setCircle(pr);
-                    sprite.body.setOffset(
-                        sprite.displayWidth/2 - pr,
-                        sprite.displayHeight/2 - pr
-                    );
+                    sprite.body.setOffset(0,0);
                     this.players.set(id, sprite);
                     // 닉네임 텍스트
-                    const nameText = this.add.text(info.x, info.y - 30, info.nickname, {
+                    const nameText = this.add.text(info.x, info.y - 50, info.nickname, {
                         fontSize: '18px',
                         color: '#000000',
                         fontFamily: 'Arial, sans-serif',
                         fontStyle: 'bold'
-                    }).setOrigin(0.5);
+                    }).setOrigin(0.5 , 0.5);
                     this.playerNameTexts.set(id, nameText);
                 }
             });
@@ -156,7 +158,9 @@ class RedLightGreenLightScene extends Phaser.Scene {
                     }
                 }
                 if (nameText && sprite) {
-                    nameText.setPosition(sprite.x, sprite.y - 30);
+                    nameText.setPosition(
+                        sprite.x,
+                        sprite.y - sprite.displayHeight/2 - nameText.height - 2); //2px 여백 추가 
                 }
             });
             // 3. 사라진 플레이어 제거
@@ -179,9 +183,10 @@ class RedLightGreenLightScene extends Phaser.Scene {
             const t = this.physics.add.sprite(token.x, token.y, token.key)
               .setScale(0.3)
               .setOrigin(0.5);
+            const tradius = t.displayWidth * 0.5;
             t.setData('id', token.id);
-            t.body.setCircle(16);
-            t.body.setOffset(t.displayWidth/2 - 16, t.displayHeight/2 - 16);
+            t.body.setCircle(tradius); //토큰 충돌체의 반지름름
+            t.body.setOffset(0,0);
             this.tokens.add(t);
           });
         });
@@ -227,23 +232,33 @@ class RedLightGreenLightScene extends Phaser.Scene {
             this
           );
         }
+
+        // 푸쉬 키 설정 - space key를 누를 때 
+        this.pushKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        this.socket.on('playerPush', (data: { from: string; ux: number; uy: number; strength: number}) => {
+            const pushed = this.players.get(data.from);
+            if (pushed) {
+                (pushed.body as Phaser.Physics.Arcade.Body).setVelocity(
+                    data.ux * data.strength, 
+                    data.uy * data.strength
+                );
+            }
+        });
     }
 
     /** 플레이어가 토큰과 겹쳤을 때 호출 */
     private handleCollectToken: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
-      player,
-      token
+        player, token
     ) => {
-      const t = token as Phaser.Physics.Arcade.Sprite;
-      const tokenId = t.getData('id');
-      if (typeof tokenId === 'number') {
-        // 서버에 토큰 먹기 알림
-        this.socket.emit('collectToken', tokenId);
-        // 내 토큰 카운트만 증가
-        this.tokenCount++;
-        this.tokenCountText.setText(`먹은 토큰: ${this.tokenCount}`);
-      }
-    }
+        const t = token as Phaser.Physics.Arcade.Sprite;
+        const tokenId = t.getData('id');
+        if (typeof tokenId === 'number') {
+            this.socket.emit('collectToken', tokenId);
+            this.tokenCount++;
+            this.tokenCountText.setText(`먹은 토큰: ${this.tokenCount}`);
+        }
+ 
+}
 
 
     /**
@@ -257,6 +272,9 @@ class RedLightGreenLightScene extends Phaser.Scene {
         }
         // 내 플레이어만 입력 처리
         const mySprite = this.players.get(this.myId);
+
+        if (!mySprite || !this.cursors) return;
+
         console.log('[PHASER] update() myId:', this.myId, typeof this.myId, 'players:', Array.from(this.players.keys()));
         if (!mySprite || !this.cursors) {
             console.log('[PHASER] update() - mySprite missing for myId:', this.myId, 'players:', Array.from(this.players.keys()));
@@ -286,6 +304,48 @@ class RedLightGreenLightScene extends Phaser.Scene {
 
         // 항상 토큰과의 충돌 체크
         this.physics.overlap(mySprite, this.tokens, this.handleCollectToken, undefined, this);
+
+        // space key를 한 번 누르면 푸쉬
+        if (Phaser.Input.Keyboard.JustDown(this.pushKey)) {
+            const mySprite = this.players.get(this.myId)!;
+            const myRadius = mySprite.displayWidth * 0.5;
+            const padding = 20;        // 충돌 감지 시 추가 여유치
+            const offset = 100;        // 밀어낼 때 움직일 픽셀 수
+            this.players.forEach((otherSprite, id) => {
+                if (id === this.myId) return;
+                // 1) 두 플레이어 사이 거리 계산
+                const dxTotal = otherSprite.x - mySprite.x;
+                const dyTotal = otherSprite.y - mySprite.y;
+                const dist = Math.hypot(dxTotal, dyTotal);
+                const otherRadius = otherSprite.displayWidth * 0.7;
+                // 2) 충돌 판정: 두 원이 서로 닿았으면 
+                if (dist <= myRadius + otherRadius + padding) {
+                    // 3) 밀어낼 방향 선택 (랜덤덤)
+                    const dir = Phaser.Math.RND.pick(['up','down','left','right']);
+                    let dx = 0, dy = 0;
+                    switch (dir){
+                        case 'up':    dy = -offset; break;
+                        case 'down':  dy =  offset; break;
+                        case 'left':  dx = -offset; break;
+                        case 'right': dx =  offset; break;
+                    }
+                    // 4) 즉시 위치 변경
+                    otherSprite.x += dx;
+                    otherSprite.y += dy;
+
+                     // 닉네임 텍스트도 같이 이동
+                     const nameText = this.playerNameTexts.get(id);
+                     if (nameText) {
+                        nameText.setPosition(
+                            otherSprite.x,
+                            otherSprite.y - otherSprite.displayHeight/2 - nameText.height - 2
+                        );
+                    }
+                    // 5) 서버에 동기화 요청
+                    this.socket.emit('playerPush', { id, dx, dy });
+                }
+            })
+        }
     }
 
     // moveYounghee 제거 (서버 동기화로 대체)
