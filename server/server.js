@@ -18,12 +18,14 @@ let younghee = {
 };
 
 function randomToken() {
-  return {
+  const token = {
     id: nextTokenId++,
     key: TOKEN_KEYS[Math.floor(Math.random() * TOKEN_KEYS.length)],
     x: Math.floor(Math.random() * 1920),
     y: Math.floor(Math.random() * 1080),
   };
+  console.log('[SERVER] randomToken created:', token);
+  return token;
 }
 
 function spawnTokensIfNeeded() {
@@ -57,6 +59,7 @@ function broadcastGameState(roomId) {
   // console.log(`[SERVER] broadcastGameState to ${roomId}, players:`, Object.keys(room.players));
   io.to(roomId).emit('gameState', { players: room.players });
   io.to(roomId).emit('tokensUpdate', room.tokens);
+  console.log(`[SERVER] broadcastGameState: tokensUpdate for room ${roomId}:`, room.tokens);
 }
 
 let playerInputs = {};
@@ -73,12 +76,15 @@ io.on('connection', (socket) => {
     rooms[roomId].players[socket.id] = { x: 100, y: 100, nickname };
     rooms[roomId].playerInputs = rooms[roomId].playerInputs || {};
     rooms[roomId].playerInputs[socket.id] = { left: false, right: false, up: false, down: false };
-    // 토큰 초기화(이미 있으면 유지)
-    if (!rooms[roomId].tokens) {
+    // 토큰 초기화(없거나 비어 있으면 생성)
+    if (!rooms[roomId].tokens || rooms[roomId].tokens.length === 0) {
       rooms[roomId].tokens = [];
       while (rooms[roomId].tokens.length < MAX_TOKENS) {
-        rooms[roomId].tokens.push(randomToken());
+        const newToken = randomToken();
+        rooms[roomId].tokens.push(newToken);
+        console.log(`[SERVER] Token added to room ${roomId}:`, newToken);
       }
+      console.log(`[SERVER] Room ${roomId} tokens after creation:`, rooms[roomId].tokens);
     }
     console.log(`[SERVER] joinGame: roomId=${roomId}, nickname=${nickname}, socketId=${socket.id}`);
     broadcastGameState(roomId);
@@ -111,9 +117,13 @@ io.on('connection', (socket) => {
       rooms[roomId].tokens.splice(idx, 1);
       // 새 토큰 보충
       while (rooms[roomId].tokens.length < MAX_TOKENS) {
-        rooms[roomId].tokens.push(randomToken());
+        const newToken = randomToken();
+        rooms[roomId].tokens.push(newToken);
+        console.log(`[SERVER] Token replenished in room ${roomId}:`, newToken);
       }
+      console.log(`[SERVER] Room ${roomId} tokens after replenish:`, rooms[roomId].tokens);
       io.to(roomId).emit('tokensUpdate', rooms[roomId].tokens);
+      console.log(`[SERVER] tokensUpdate emitted for room ${roomId}:`, rooms[roomId].tokens);
     }
   });
 
