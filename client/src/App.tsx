@@ -5,9 +5,16 @@ import RedLightGreenLightGame from './components/RedLightGreenLightGame';
 
 const RedLightGreenLightGameWrapper = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { roomId, playerNickname } = location.state || {};
   console.log('[LOG] RedLightGreenLightGameWrapper', roomId, playerNickname);
-  return <RedLightGreenLightGame roomId={roomId} playerNickname={playerNickname} onGoBack={() => {}} />;
+  return (
+    <RedLightGreenLightGame
+      roomId={roomId}
+      playerNickname={playerNickname}
+      onGoBack={() => navigate('/')}
+    />
+  );
 };
 
 const App: React.FC = () => {
@@ -24,7 +31,7 @@ const App: React.FC = () => {
 // useNavigate를 TitleScreen에 연결
 const TitleScreenWithNav: React.FC = () => {
   const navigate = useNavigate();
-  return <TitleScreen onStartGame={(roomId, playerNickname) => navigate('/game', { state: { roomId, playerNickname } })} />;
+  return <TitleScreen onStartGame={(roomId: string, playerNickname: string) => navigate('/game', { state: { roomId, playerNickname } })} />;
 };
 
 export default App;

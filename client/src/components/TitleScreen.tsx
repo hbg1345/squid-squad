@@ -344,7 +344,7 @@ class SquidGameTitleScene extends Phaser.Scene {
 }
 
 type TitleScreenProps = {
-    onStartGame: (roomId?: string) => void;
+    onStartGame: (roomId: string, playerNickname: string) => void;
 };
 
 const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {

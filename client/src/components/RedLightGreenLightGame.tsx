@@ -42,6 +42,9 @@ class RedLightGreenLightScene extends Phaser.Scene {
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
     private playerSpeed: number = 500;
 
+    private handleGameState: any;
+    private handleYoungheeUpdate: any;
+
     constructor() {
         super({ key: 'RedLightGreenLightScene' });
     }
@@ -116,7 +119,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
             });
             this.youngheeListenerRegistered = true;
         }
-        this.socket.on('gameState', (data) => {
+        this.handleGameState = (data: any) => {
             // 1. 없는 플레이어 생성
             Object.entries(data.players).forEach(([id, info]: [string, any]) => {
                 if (!this.players.has(id)) {
@@ -162,7 +165,18 @@ class RedLightGreenLightScene extends Phaser.Scene {
                     this.playerNameTexts.delete(id);
                 }
             });
-        });
+            // 생존자 수 표시 (size → Object.keys(...).length)
+            const survivorCount = data.players ? Object.keys(data.players).length : 0;
+            this.survivorText.setText(`현재 생존자: ${survivorCount}/456`);
+        };
+        this.handleYoungheeUpdate = (data: any) => {
+            if (this.younghee) {
+                this.younghee.setPosition(data.x, data.y);
+                this.drawYoungheeVision(data.x, data.y);
+            }
+        };
+        this.socket.on('gameState', this.handleGameState);
+        this.socket.on('youngheeUpdate', this.handleYoungheeUpdate);
         this.socket.on('tokensUpdate', (data) => {
           // 기존 토큰 모두 제거
           this.tokens.clear(true, true);
@@ -290,6 +304,8 @@ class RedLightGreenLightScene extends Phaser.Scene {
      * @param youngheeY - Younghee's Y position (Sprite's center).
      */
     private drawYoungheeVision(youngheeX: number, youngheeY: number) {
+        // null 체크 추가
+        if (!this.younghee || !this.younghee.displayHeight || !this.younghee.texture) return;
         // 이전에 그려둔 반투명 영역과 테두리 선 지우기 (이전 프레임에서 그려진 것들을 지움)
         this.youngheeVisionGraphics.clear();
         this.youngheeVisionLineGraphics.clear();
@@ -310,6 +326,15 @@ class RedLightGreenLightScene extends Phaser.Scene {
 
         this.children.bringToTop(this.younghee);
     }
+
+    shutdown() {
+        this.socket.off('gameState', this.handleGameState);
+        this.socket.off('youngheeUpdate', this.handleYoungheeUpdate);
+    }
+    destroy() {
+        this.socket.off('gameState', this.handleGameState);
+        this.socket.off('youngheeUpdate', this.handleYoungheeUpdate);
+    }
 }
 
 type RedLightGreenLightGameProps = {
@@ -322,6 +347,54 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     console.log('[LOG] RedLightGreenLightGame props', { playerNickname, roomId });
     const gameRef = useRef<HTMLDivElement>(null);
     const gameInstance = useRef<Phaser.Game | null>(null);
+
+    // 제한 시간 및 phase 상태 추가
+    const [phase, setPhase] = useState<'waiting' | 'dead' | 'playing'>('waiting');
+    const [timer, setTimer] = useState(10);
+
+    // 타이머 감소 로직
+    useEffect(() => {
+        if (phase === 'waiting') {
+            let last = Date.now();
+            const id = setInterval(() => {
+                const now = Date.now();
+                const diff = (now - last) / 1000;
+                last = now;
+                setTimer(t => Math.max(0, t - diff));
+            }, 50);
+            return () => clearInterval(id);
+        }
+    }, [phase]);
+
+    // 타이머가 0이 되면 dead로 전환
+    useEffect(() => {
+        if (phase === 'waiting' && timer <= 0) {
+            setPhase('dead');
+        }
+    }, [phase, timer]);
+
+    // dead phase가 되면 자동으로 타이틀로 이동 + Phaser 인스턴스 안전 파괴 (중복 방지)
+    const alreadyDead = useRef(false);
+    useEffect(() => {
+        if (phase === 'dead' && !alreadyDead.current) {
+            alreadyDead.current = true;
+            if (gameInstance.current) {
+                gameInstance.current.destroy(true);
+                gameInstance.current = null;
+            }
+            onGoBack();
+        }
+        if (phase !== 'dead') {
+            alreadyDead.current = false;
+        }
+    }, [phase, onGoBack]);
+
+    // phase가 바뀔 때마다 타이머 초기화 (dead->waiting 등)
+    useEffect(() => {
+        if (phase === 'waiting') {
+            setTimer(10);
+        }
+    }, [phase]);
 
     useEffect(() => {
         if (gameRef.current) {
@@ -376,11 +449,28 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
         onGoBack();
     };
 
+    // 타이머 UI
+    const timerUI = phase === 'waiting' && (
+        <div style={{
+            position: 'fixed', top: 32, left: '50%', transform: 'translateX(-50%)',
+            fontSize: timer <= 3 ? 100 : 32, color: '#fff', fontWeight: 'bold', zIndex: 1000,
+            textShadow: '0 0 32px #000, 0 0 8px #000',
+            pointerEvents: 'none',
+            transition: 'font-size 0.2s cubic-bezier(0.4,1.4,0.6,1)',
+        }}>
+            {timer > 0 ? timer.toFixed(2) : '0.00'}
+        </div>
+    );
+
+    // deadUI 제거 (자동 이동)
+
     return (
         <div className="game-screen">
+            {timerUI}
             {/* Container where the Phaser game will be rendered */}
-            <div ref={gameRef} className="game-container" />
-
+            {phase !== 'dead' && (
+                <div ref={gameRef} className="game-container" />
+            )}
             {/* Back button */}
             <div className="back-button-container">
                 <button
