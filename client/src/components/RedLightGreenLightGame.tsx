@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import './RedLightGreenLight.css';
 import { getSocket, disconnectSocket } from '../socket';
 import { useNavigate } from 'react-router-dom';
+import AlphabetModal from './AlphabetModal';
 
 // Vite 환경변수 타입 선언 (없으면 추가)
 declare global {
@@ -31,7 +32,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
 
     private visionAngle: number     = 60;   // 콘의 벌어짐 각도 (°)
     private visionDirection: number = 270;  // 시야가 향하는 기본 방향 (°)
-    private visionDistance: number  = 300;  // 시야가 뻗어나가는 거리 (px, 기존의 절반)
+    private visionDistance: number  = 600;  // 시야가 뻗어나가는 거리 (px, 2배로 증가)
 
     //tokens
     private tokens!: Phaser.Physics.Arcade.Group;
@@ -304,16 +305,24 @@ class RedLightGreenLightScene extends Phaser.Scene {
             up: this.cursors.up.isDown,
             down: this.cursors.down.isDown
         };
-        // 움직임이 있을 때 Younghee 시야 체크
         const isMoving = input.left || input.right || input.up || input.down;
-        if (isMoving && this.isInYoungheeVision(mySprite.x, mySprite.y)) {
-            // 서버에 죽음 알림
-            this.socket.emit('playerDead', { roomId: this.roomId });
-            // React로 dead phase 전달
-            if (typeof window !== 'undefined' && (window as any).onDeadByYounghee) {
-                (window as any).onDeadByYounghee();
+        const inVision = this.isInYoungheeVision(mySprite.x, mySprite.y);
+
+        if (inVision) {
+            if (isMoving) {
+                // 서버에 죽음 알림
+                this.socket.emit('playerDead', { roomId: this.roomId });
+                // React로 dead phase 전달
+                if (typeof window !== 'undefined' && (window as any).onDeadByYounghee) {
+                    (window as any).onDeadByYounghee();
+                }
+                return; // 더 이상 update 진행 X
+            } else {
+                // 움직이지 않고 시야에 닿아있으면 모달 요청
+                if (typeof window !== 'undefined' && (window as any).onShowAlphabetModal) {
+                    (window as any).onShowAlphabetModal();
+                }
             }
-            return; // 더 이상 update 진행 X
         }
         // 키 입력 상태 콘솔 출력 제거
         if (JSON.stringify(input) !== JSON.stringify(this.lastInputState)) {
@@ -381,6 +390,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     const [phase, setPhase] = useState<'waiting' | 'dead' | 'survived' | 'playing'>('waiting');
     const [timer, setTimer] = useState(10);
     const [tokenCount, setTokenCount] = useState(0);
+    const [showAlphabetModal, setShowAlphabetModal] = useState(false);
 
     // 타이머 감소 로직
     useEffect(() => {
@@ -444,9 +454,11 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     useEffect(() => {
         (window as any).onCollectToken = () => setTokenCount(c => c + 1);
         (window as any).onDeadByYounghee = () => setPhase('dead');
+        (window as any).onShowAlphabetModal = () => setShowAlphabetModal(true);
         return () => { 
             delete (window as any).onCollectToken;
             delete (window as any).onDeadByYounghee;
+            delete (window as any).onShowAlphabetModal;
         };
     }, []);
 
@@ -525,6 +537,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             {phase !== 'dead' && (
                 <div ref={gameRef} className="game-container" />
             )}
+            <AlphabetModal isOpen={showAlphabetModal} onClose={() => setShowAlphabetModal(false)} />
             {/* Back button */}
             <div className="back-button-container">
                 <button

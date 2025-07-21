@@ -415,9 +415,7 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
     useEffect(() => {
         const handleMatchingCount = (count: number) => setMatchingCurrent(count);
         const handleMatchFound = ({ roomId }: { roomId: string }) => {
-            console.log('[LOG] matchFound', roomId, nickname);
             setRoomId(roomId);
-            console.log('[LOG] setRoomId', roomId);
             setShowMatchingModal(false);
             onStartGame(roomId, nickname);
         };
@@ -477,7 +475,6 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
 const TitleScreenWithNav: React.FC = () => {
   const navigate = useNavigate();
   return <TitleScreen onStartGame={(roomId, playerNickname) => {
-    console.log('[LOG] navigate to /game', roomId, playerNickname);
     navigate('/game', { state: { roomId, playerNickname } });
   }} />;
 };
