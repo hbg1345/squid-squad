@@ -4,6 +4,7 @@ import "./AlphabetModal.css";
 interface AlphabetModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
 const ALPHABET_COUNT = 5;
@@ -20,7 +21,7 @@ function getRandomAlphabets(count: number) {
   return arr;
 }
 
-const AlphabetModal: React.FC<AlphabetModalProps> = ({ isOpen, onClose }) => {
+const AlphabetModal: React.FC<AlphabetModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [alphabets, setAlphabets] = useState<string[]>([]);
   const [solved, setSolved] = useState<boolean[]>([]);
   const [wrongIdx, setWrongIdx] = useState<number | null>(null);
@@ -73,7 +74,6 @@ const AlphabetModal: React.FC<AlphabetModalProps> = ({ isOpen, onClose }) => {
     if (isOpen && time <= 0 && !failed && solved.some((v) => !v)) {
       setFailed(true);
       setTimeout(() => {
-        alert("실패! 다시 시도하세요.");
         onClose();
       }, 400);
     }
@@ -119,11 +119,11 @@ const AlphabetModal: React.FC<AlphabetModalProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (isOpen && solved.length > 0 && solved.every(Boolean)) {
       setTimeout(() => {
-        alert("성공!");
+        if (onSuccess) onSuccess();
         onClose();
       }, 300);
     }
-  }, [solved, isOpen, onClose]);
+  }, [solved, isOpen, onClose, onSuccess]);
 
   // 흔들림 효과: 3초 이하일 때 true
   const isShaking = time <= 3.0 && time > 0;

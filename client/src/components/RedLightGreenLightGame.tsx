@@ -59,7 +59,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
         const settingsData = this.sys.settings.data as { playerNickname?: string, roomId?: string };
         const nickname = data?.playerNickname || settingsData?.playerNickname || '';
         const roomId = data?.roomId || settingsData?.roomId || '';
-        console.log('[LOG] RedLightGreenLightScene.init', data, settingsData);
         this.playerNickname = nickname;
         this.roomId = roomId;
     }
@@ -80,7 +79,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
      */
     create() {
         this.myId = this.socket.id ?? '';
-        console.log('[CLIENT] create() called, roomId:', this.roomId);
         this.socket.emit('joinGame', { roomId: this.roomId, nickname: this.playerNickname });
         // Set a light grey background color as in the image
         this.cameras.main.setBackgroundColor('#F0F0F0');
@@ -307,7 +305,12 @@ class RedLightGreenLightScene extends Phaser.Scene {
         };
         const isMoving = input.left || input.right || input.up || input.down;
         const inVision = this.isInYoungheeVision(mySprite.x, mySprite.y);
-
+        const now = Date.now();
+        const invincibleUntil = (typeof window !== 'undefined' && (window as any).getInvincibleUntil)
+            ? (window as any).getInvincibleUntil() : 0;
+        if (now < invincibleUntil) {
+            // 무적 상태: 시야 판정 무시
+        } else {
         if (inVision) {
             if (isMoving) {
                 // 서버에 죽음 알림
@@ -323,6 +326,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
                     (window as any).onShowAlphabetModal();
                 }
             }
+        }
         }
         // 키 입력 상태 콘솔 출력 제거
         if (JSON.stringify(input) !== JSON.stringify(this.lastInputState)) {
@@ -381,7 +385,6 @@ type RedLightGreenLightGameProps = {
 };
 
 const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBack, playerNickname, roomId }) => {
-    console.log('[LOG] RedLightGreenLightGame props', { playerNickname, roomId });
     const gameRef = useRef<HTMLDivElement>(null);
     const gameInstance = useRef<Phaser.Game | null>(null);
     const navigate = useNavigate();
@@ -391,6 +394,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     const [timer, setTimer] = useState(10);
     const [tokenCount, setTokenCount] = useState(0);
     const [showAlphabetModal, setShowAlphabetModal] = useState(false);
+    const [invincibleUntil, setInvincibleUntil] = useState(0);
 
     // 타이머 감소 로직
     useEffect(() => {
@@ -455,12 +459,14 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
         (window as any).onCollectToken = () => setTokenCount(c => c + 1);
         (window as any).onDeadByYounghee = () => setPhase('dead');
         (window as any).onShowAlphabetModal = () => setShowAlphabetModal(true);
+        (window as any).getInvincibleUntil = () => invincibleUntil;
         return () => { 
             delete (window as any).onCollectToken;
             delete (window as any).onDeadByYounghee;
             delete (window as any).onShowAlphabetModal;
+            delete (window as any).getInvincibleUntil;
         };
-    }, []);
+    }, [invincibleUntil]);
 
     useEffect(() => {
         if (gameRef.current) {
@@ -493,14 +499,12 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             setTimeout(() => {
                 if (gameInstance.current) {
                     gameInstance.current.scene.stop('RedLightGreenLightScene');
-                    console.log('[LOG] scene.start with', { playerNickname, roomId });
                     gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname, roomId });
                 }
             }, 100);
         } else {
             // Phaser 인스턴스가 이미 있으면 scene.stop 후 scene.start
             gameInstance.current.scene.stop('RedLightGreenLightScene');
-            console.log('[LOG] scene.start (existing instance) with', { playerNickname, roomId });
             gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname, roomId });
         }
         return () => {
@@ -513,6 +517,12 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
 
     const handleGoBack = () => {
         onGoBack();
+    };
+
+    // AlphabetModal 성공 시 무적 3초
+    const handleAlphabetSuccess = () => {
+        setShowAlphabetModal(false);
+        setInvincibleUntil(Date.now() + 3000); // 3초 무적
     };
 
     // 타이머 UI
@@ -537,7 +547,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             {phase !== 'dead' && (
                 <div ref={gameRef} className="game-container" />
             )}
-            <AlphabetModal isOpen={showAlphabetModal} onClose={() => setShowAlphabetModal(false)} />
+            <AlphabetModal isOpen={showAlphabetModal} onClose={() => setShowAlphabetModal(false)} onSuccess={handleAlphabetSuccess} />
             {/* Back button */}
             <div className="back-button-container">
                 <button
