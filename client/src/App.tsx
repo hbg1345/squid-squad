@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import TitleScreen from './components/TitleScreen';
 import RedLightGreenLightGame from './components/RedLightGreenLightGame';
+import GameScreen from './components/GameScreen';
 
 const RedLightGreenLightGameWrapper = () => {
   const location = useLocation();
@@ -23,6 +24,7 @@ const App: React.FC = () => {
       <Routes>
         <Route path="/" element={<TitleScreenWithNav />} />
         <Route path="/game" element={<RedLightGreenLightGameWrapper />} />
+        <Route path="/room" element={<GameScreen />} />
       </Routes>
     </BrowserRouter>
   );

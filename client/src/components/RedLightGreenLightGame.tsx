@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import './RedLightGreenLight.css';
 import { socket } from '../socket';
+import { useNavigate } from 'react-router-dom';
 
 // Vite 환경변수 타입 선언 (없으면 추가)
 declare global {
@@ -267,6 +268,10 @@ class RedLightGreenLightScene extends Phaser.Scene {
         // 내 토큰 카운트만 증가
         this.tokenCount++;
         this.tokenCountText.setText(`먹은 토큰: ${this.tokenCount}`);
+        // React state와 연동
+        if (typeof window !== 'undefined' && (window as any).onCollectToken) {
+          (window as any).onCollectToken();
+        }
       }
     }
 
@@ -347,10 +352,12 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     console.log('[LOG] RedLightGreenLightGame props', { playerNickname, roomId });
     const gameRef = useRef<HTMLDivElement>(null);
     const gameInstance = useRef<Phaser.Game | null>(null);
+    const navigate = useNavigate();
 
     // 제한 시간 및 phase 상태 추가
-    const [phase, setPhase] = useState<'waiting' | 'dead' | 'playing'>('waiting');
+    const [phase, setPhase] = useState<'waiting' | 'dead' | 'survived' | 'playing'>('waiting');
     const [timer, setTimer] = useState(10);
+    const [tokenCount, setTokenCount] = useState(0);
 
     // 타이머 감소 로직
     useEffect(() => {
@@ -366,12 +373,23 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
         }
     }, [phase]);
 
-    // 타이머가 0이 되면 dead로 전환
+    // 타이머가 0이 되면 토큰 개수에 따라 phase 분기
     useEffect(() => {
         if (phase === 'waiting' && timer <= 0) {
-            setPhase('dead');
+            if (tokenCount >= 1) {
+                setPhase('survived');
+            } else {
+                setPhase('dead');
+            }
         }
-    }, [phase, timer]);
+    }, [phase, timer, tokenCount]);
+
+    // survived phase가 되면 GameScreen(/room)으로 이동
+    useEffect(() => {
+        if (phase === 'survived') {
+            navigate('/room');
+        }
+    }, [phase, navigate]);
 
     // dead phase가 되면 자동으로 타이틀로 이동 + Phaser 인스턴스 안전 파괴 (중복 방지)
     const alreadyDead = useRef(false);
@@ -389,12 +407,20 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
         }
     }, [phase, onGoBack]);
 
-    // phase가 바뀔 때마다 타이머 초기화 (dead->waiting 등)
+    // phase가 바뀔 때마다 타이머/토큰 초기화 (dead->waiting 등)
     useEffect(() => {
         if (phase === 'waiting') {
             setTimer(10);
+            setTokenCount(0);
         }
     }, [phase]);
+
+    // 토큰을 먹을 때 tokenCount 증가 (Phaser와 React 연결)
+    // window에 콜백을 등록해서 Phaser에서 호출하도록 연결
+    useEffect(() => {
+        (window as any).onCollectToken = () => setTokenCount(c => c + 1);
+        return () => { delete (window as any).onCollectToken; };
+    }, []);
 
     useEffect(() => {
         if (gameRef.current) {

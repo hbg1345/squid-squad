@@ -4,6 +4,7 @@ import './TitleScreen.css';
 import { socket } from '../socket';
 import MatchingModal from '../MatchingModal';
 import { useNavigate } from 'react-router-dom';
+import { MATCH_SIZE } from '../constants/game';
 
 // Squid Game style title screen scene
 class SquidGameTitleScene extends Phaser.Scene {
@@ -357,7 +358,7 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
     const [showMatchingModal, setShowMatchingModal] = useState(false);
     const [elapsed, setElapsed] = useState(0);
     const [matchingCurrent, setMatchingCurrent] = useState(1); // 본인 포함
-    const [matchingTotal] = useState(2); // 매칭 인원수 2명
+    const [matchingTotal] = useState(MATCH_SIZE); // 매칭 인원수 상수 사용
     const [roomId, setRoomId] = useState<string | null>(null);
     const [nickname, setNickname] = useState('');
 
