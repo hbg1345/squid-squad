@@ -174,70 +174,60 @@ class RedLightGreenLightScene extends Phaser.Scene {
         this.cursors = this.input.keyboard!.createCursorKeys();
 
         //tokens
-        //토큰 개수 표시 ui
+        // 토큰 개수 표시 ui
         const margin = 16;
         this.tokenCountText = this.add
-        .text(this.scale.width - 100, margin, '먹은 토큰: 0', {
-          fontSize: '16px', color: '#000'
-        })
-        .setOrigin(1, 0); // 오른쪽 상단에 위치
-        //토큰 그룹 생성
+          .text(this.scale.width - 100, margin, '먹은 토큰: 0', {
+            fontSize: '16px', color: '#000'
+          })
+          .setOrigin(1, 0); // 오른쪽 상단에 위치
+        // 토큰 그룹 생성
         this.tokens = this.physics.add.group();
 
-        // 초기에 maxTokens 개수만큼 랜덤 배치
-        for (let i = 0; i < this.maxTokens; i++) {
-          this.spawnToken();
-        } 
+        // 서버에서 토큰 정보 수신
+        this.socket.on('tokensUpdate', (tokens) => {
+          // 기존 토큰 모두 제거
+          this.tokens.clear(true, true);
+          // 서버에서 받은 토큰만 다시 생성
+          tokens.forEach((token: any) => {
+            const t = this.physics.add.sprite(token.x, token.y, token.key)
+              .setScale(0.3)
+              .setOrigin(0.5);
+            t.setData('id', token.id);
+            t.body.setCircle(16);
+            t.body.setOffset(t.displayWidth/2 - 16, t.displayHeight/2 - 16);
+            this.tokens.add(t);
+          });
+        });
 
         // 플레이어와 토큰 충돌/겹침 처리
         const myPlayer = this.players.get(this.myId);
         if (myPlayer) {
-            this.physics.add.overlap(
-                myPlayer,
-                this.tokens,
-                this.handleCollectToken,
-                undefined,
-                this
-            );
+          this.physics.add.overlap(
+            myPlayer,
+            this.tokens,
+            this.handleCollectToken,
+            undefined,
+            this
+          );
         }
     }
 
-    /** 화면 구석구석 랜덤 위치에 토큰 하나를 생성하거나 재배치 */
-  private spawnToken() {
-    const key = Phaser.Utils.Array.GetRandom(this.tokenKeys);
-    const x = Phaser.Math.Between(50, this.scale.width  - 50);
-    const y = Phaser.Math.Between(100, this.scale.height - 50);
-
-    // 그룹에 생성
-    const t = this.physics.add.sprite(x, y, key)
-    .setScale(0.3) //토큰 크기 조절 
-    .setOrigin(0.5);
-    this.tokens.add(t);
-    // t.body?.setImmovable(true); // 필요하면 고//정
-
-    // 토큰도 반지름 16px 원형 바디로 설정
-    const tr = 16;
-    t.body.setCircle(tr);
-    t.body.setOffset(t.displayWidth/2 - tr, t.displayHeight/2 - tr);
-  }
-
-  /** 플레이어가 토큰과 겹쳤을 때 호출 */
-  private handleCollectToken: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
-    player,
-    token
-  ) => {
-    const p = player as Phaser.Physics.Arcade.Sprite;
-    const t = token as Phaser.Physics.Arcade.Sprite;
-    // 1) 기존 토큰 제거
-    t.disableBody(true, true);
-    // 2) 카운터 증가 및 UI 갱신
-    this.tokenCount++;
-    this.tokenCountText.setText(`먹은 토큰: ${this.tokenCount}`);
-    // 3) 잠시 후 새 토큰 스폰
-    this.time.delayedCall(500, () => {
-      this.spawnToken();
-    });
-  }
+    /** 플레이어가 토큰과 겹쳤을 때 호출 */
+    private handleCollectToken: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
+      player,
+      token
+    ) => {
+      const t = token as Phaser.Physics.Arcade.Sprite;
+      const tokenId = t.getData('id');
+      if (typeof tokenId === 'number') {
+        // 서버에 토큰 먹기 알림
+        this.socket.emit('collectToken', tokenId);
+        // 내 토큰 카운트만 증가
+        this.tokenCount++;
+        this.tokenCountText.setText(`먹은 토큰: ${this.tokenCount}`);
+      }
+    }
 
 
     /**
