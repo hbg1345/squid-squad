@@ -17,7 +17,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
 
     private visionAngle: number     = 60;   // 콘의 벌어짐 각도 (°)
     private visionDirection: number = 270;  // 시야가 향하는 기본 방향 (°)
-    private visionDistance: number  = 600;  // 시야가 뻗어나가는 거리 (px)
+    private visionDistance: number  = 200;  // 맨 처음에 시야가 뻗어나가는 거리 (px) - 원 
 
     //tokens
     private tokens!: Phaser.Physics.Arcade.Group;
@@ -82,7 +82,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
         // 영희 최소 시야 그리기 
         this.drawYoungheeVision(this.younghee.x, this.younghee.y);
 
-        // 영희 이동하는 시간 설정 
+        // 영희 이동하는 시간 설정 - 매번 다르게 설정하기......... !!!!!! 
         this.youngheeMoveTimer = this.time.addEvent({
             delay: 5000, // 5 seconds
             callback: this.moveYounghee,
@@ -99,13 +99,13 @@ class RedLightGreenLightScene extends Phaser.Scene {
         .setScale(0.5) // 플레이어 이미지 크기 조정
         .setOrigin(0.5, 0.5);
 
-        const pr = 20;
-        this.player.body.setCircle(pr);
-        this.player.body.setOffset(
-            this.player.displayWidth/2 - pr,
-            this.player.displayHeight/2 - pr
+        const radius = this.player.displayWidth * 0.7;
+        const body = this.player.body as Phaser.Physics.Arcade.Body;
+        body.setCircle(radius);
+        body.setOffset(
+            (this.player.displayWidth - radius * 2) / 2,
+            (this.player.displayHeight - radius * 2) / 2
         );
-        
 
         // Player's nickname text
         this.playerNameText = this.add
@@ -236,10 +236,8 @@ class RedLightGreenLightScene extends Phaser.Scene {
         const newX = Phaser.Math.Between(100, this.scale.width - 100);
         const newY = Phaser.Math.Between(150, this.scale.height / 2 - 50); 
 
-        // 시야 파라미터 랜덤화
-        this.visionAngle     = Phaser.Math.Between(50, 110);   // 50°~110°
-        this.visionDirection = Phaser.Math.Between(0, 360); // 전체 360°에서 랜덤하게 
-        this.visionDistance  = Phaser.Math.Between(300, 800); // 300px~800px
+        this.visionDistance  = Phaser.Math.Between(100, 300); // 300px~800px
+        this.drawYoungheeVision(newX, newY);
 
         // 딜레이 후 영희 & 시야 재등장 
         this.time.delayedCall(200, () => { // 200ms for "뿅!" effect
@@ -247,8 +245,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
 
           this.youngheeVisionGraphics.setVisible(true);
           this.youngheeVisionLineGraphics.setVisible(true);
-
-          this.drawYoungheeVision(newX, newY);
         }, [], this);
     }
 
@@ -266,44 +262,15 @@ class RedLightGreenLightScene extends Phaser.Scene {
         // Sprite의 Y는 중앙이므로, 이미지 높이의 절반 위쪽으로 이동하여 눈 높이로 맞춤
         // 영희 이미지의 눈이 대략 이미지 상단에서 35% 지점에 있다고 가정하고 계산
         const eyeX = youngheeX;
-        const eyeY = youngheeY - (this.younghee.displayHeight / 2) + (this.younghee.displayHeight * 0.35); 
+        const eyeY = youngheeY - (this.younghee.displayHeight / 2) + (this.younghee.displayHeight * 0.35)
+        +40; 
 
-        // 화면 대각선 길이 계산 -> 시야가 화면 전체를 덮을 수 있도록
-        const w = this.scale.width;
-        const h = this.scale.height;
-
-        // 3) 방향·각도·거리 가져오기
-        const angle     = this.visionAngle;
-        const dir       = this.visionDirection;
-        const distance  = Math.hypot(w, h);
-
-        // 4) 양쪽 경계점 계산
-        const leftRad  = Phaser.Math.DegToRad(dir - angle/2);
-        const rightRad = Phaser.Math.DegToRad(dir + angle/2);
-
-        const leftX  = eyeX + distance * Math.cos(leftRad);
-        const leftY  = eyeY + distance * Math.sin(leftRad);
-        const rightX = eyeX + distance * Math.cos(rightRad);
-        const rightY = eyeY + distance * Math.sin(rightRad);
-        
-        
-        // 5) 반투명 콘 채우기
         this.youngheeVisionGraphics
-          .fillStyle(0xD5F2FF, 1)
-          .beginPath()
-          .moveTo(eyeX, eyeY)
-          .lineTo(leftX, leftY)
-          .lineTo(rightX, rightY)
-          .closePath()
-          .fill();
+        .fillStyle(0xD5F2FF, 0.6)
+        .fillCircle(eyeX, eyeY, this.visionDistance);
 
-         // 6) 테두리 선 그리기
-         this.youngheeVisionLineGraphics
-          .clear()
-          .lineStyle(2, 0x000000, 0.6)
-          .beginPath()
-          .moveTo(eyeX, eyeY)
-          .strokePath();
+        this.youngheeVisionLineGraphics
+        .strokeCircle(eyeX, eyeY, this.visionDistance);
 
         this.children.bringToTop(this.younghee);
     }
