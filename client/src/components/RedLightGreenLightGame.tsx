@@ -4,6 +4,7 @@ import './RedLightGreenLight.css';
 import { getSocket, disconnectSocket } from '../socket';
 import { useNavigate } from 'react-router-dom';
 import AlphabetModal from './AlphabetModal';
+import ChatBox from './ChatBox';
 
 // Vite 환경변수 타입 선언 (없으면 추가)
 declare global {
@@ -601,6 +602,10 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     return (
         <div className="game-screen">
             {timerUI}
+            {/* 채팅창 */}
+            {roomId && (
+                <ChatBox roomId={roomId} playerNickname={playerNickname || '익명'} />
+            )}
             {/* Container where the Phaser game will be rendered */}
             {phase !== 'dead' && (
                 <div ref={gameRef} className="game-container" />

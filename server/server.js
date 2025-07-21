@@ -139,6 +139,10 @@ io.on('connection', (socket) => {
     waitingPlayers = waitingPlayers.filter(s => s !== socket);
     io.emit('matchingCount', waitingPlayers.length);
   });
+  socket.on('chat', ({ roomId, nickname, message, time }) => {
+    // 같은 roomId에 join된 모든 유저에게 메시지 전송
+    io.to(roomId).emit('chat', { roomId, nickname, message, time });
+  });
   socket.on('disconnect', () => {
     // 모든 방에서 플레이어 제거
     Object.entries(rooms).forEach(([roomId, room]) => {
