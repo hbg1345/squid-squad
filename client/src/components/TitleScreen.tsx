@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import './TitleScreen.css';
+import MatchingModal from '../MatchingModal';
 
 // Squid Game style title screen scene
 class SquidGameTitleScene extends Phaser.Scene {
@@ -351,6 +352,10 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
     const gameInstance = useRef<Phaser.Game | null>(null);
     // State variable to control the visibility of the "Start Game" button.
     const [showStartButton, setShowStartButton] = useState(false);
+    const [showMatchingModal, setShowMatchingModal] = useState(false);
+    const [elapsed, setElapsed] = useState(0);
+    const [matchingCurrent, setMatchingCurrent] = useState(2); // 예시값
+    const [matchingTotal, setMatchingTotal] = useState(4); // 예시값
 
     /**
      * React useEffect hook:
@@ -391,11 +396,27 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
         };
     }, []); // Empty dependency array ensures this effect runs only once on mount.
 
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+        if (showMatchingModal) {
+            setElapsed(0);
+            timer = setInterval(() => setElapsed(e => e + 1), 1000);
+        }
+        return () => { if (timer) clearInterval(timer); };
+    }, [showMatchingModal]);
+
     /**
      * Handler for when the "Start Game" button is clicked.
      */
     const handleStartGame = () => {
-        onStartGame(); // Call the onStartGame function passed from the parent component.
+        setShowMatchingModal(true);
+        setTimeout(() => {
+            setShowMatchingModal(false);
+            onStartGame();
+        }, 2000); // 2초 후 매칭 완료
+    };
+    const handleCancelMatching = () => {
+        setShowMatchingModal(false);
     };
 
     return (
@@ -404,7 +425,7 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
             <div ref={gameRef} className="game-container" />
 
             {/* The "Start Game" button, visible only after the animation completes */}
-            {showStartButton && (
+            {showStartButton && !showMatchingModal && (
                 <div className="start-button-container">
                     <button
                         className="start-button"
@@ -414,6 +435,13 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
                     </button>
                 </div>
             )}
+            <MatchingModal
+                open={showMatchingModal}
+                onCancel={handleCancelMatching}
+                current={matchingCurrent}
+                total={matchingTotal}
+                elapsed={elapsed}
+            />
         </div>
     );
 };
