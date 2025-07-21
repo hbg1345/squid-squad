@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import './RedLightGreenLight.css';
+import { io, Socket } from 'socket.io-client';
 
 // Red Light, Green Light Game Scene
 class RedLightGreenLightScene extends Phaser.Scene {
@@ -9,11 +10,11 @@ class RedLightGreenLightScene extends Phaser.Scene {
     private youngheeVisionGraphics!: Phaser.GameObjects.Graphics;
     private youngheeVisionLineGraphics!: Phaser.GameObjects.Graphics;
     private youngheeMoveTimer!: Phaser.Time.TimerEvent;
-    private player!: Phaser.GameObjects.Sprite;
-    private playerNameText!: Phaser.GameObjects.Text;
-    private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-    private playerSpeed: number = 500; // Player movement speed
-    private playerNickname: string = '플레이어'; // Default nickname, will be overridden by prop
+    private socket!: Socket;
+    private players: Map<string, Phaser.GameObjects.Sprite> = new Map();
+    private playerNameTexts: Map<string, Phaser.GameObjects.Text> = new Map();
+    private myId: string = '';
+    private playerNickname: string = '';
 
     private visionAngle: number     = 60;   // 콘의 벌어짐 각도 (°)
     private visionDirection: number = 270;  // 시야가 향하는 기본 방향 (°)
@@ -26,6 +27,9 @@ class RedLightGreenLightScene extends Phaser.Scene {
     private tokenCount = 0;
     private tokenCountText!: Phaser.GameObjects.Text;
 
+    private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+    private playerSpeed: number = 500;
+
     constructor() {
         super({ key: 'RedLightGreenLightScene' });
     }
@@ -35,7 +39,10 @@ class RedLightGreenLightScene extends Phaser.Scene {
      * @param data - Data object containing the player's nickname.
      */
     init(data: { playerNickname: string }) {
-        this.playerNickname = data.playerNickname;
+        // Phaser에서 scene.start로 전달된 데이터는 this.sys.settings.data에 있음
+        const nickname = data?.playerNickname || ((this.sys.settings.data as { playerNickname?: string })?.playerNickname) || '';
+        this.playerNickname = nickname;
+        console.log('[PHASER] init() called, playerNickname:', this.playerNickname);
     }
 
     /**
@@ -53,6 +60,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
      * Called once when the scene is created and ready to be displayed.
      */
     create() {
+        console.log('[PHASER] create() called');
         // Set a light grey background color as in the image
         this.cameras.main.setBackgroundColor('#F0F0F0');
 
@@ -95,27 +103,72 @@ class RedLightGreenLightScene extends Phaser.Scene {
         const initialPlayerX = this.scale.width / 2;
         const initialPlayerY = this.scale.height - 100;
 
-        this.player = this.physics.add.sprite(initialPlayerX, initialPlayerY, 'player')
-        .setScale(0.5) // 플레이어 이미지 크기 조정
-        .setOrigin(0.5, 0.5);
-
-        const pr = 20;
-        this.player.body.setCircle(pr);
-        this.player.body.setOffset(
-            this.player.displayWidth/2 - pr,
-            this.player.displayHeight/2 - pr
-        );
-        
-
-        // Player's nickname text
-        this.playerNameText = this.add
-        .text(initialPlayerX, initialPlayerY - 30, this.playerNickname, {
-            fontSize: '18px',
-            color: '#000000',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold'
-        })
-        .setOrigin(0.5); // Center nickname above player
+        // Socket.io 연결
+        this.socket = io('http://localhost:3001');
+        this.socket.on('connect', () => {
+            this.myId = this.socket.id ?? '';
+            console.log('[SOCKET] Connected! myId:', this.myId);
+            this.socket.emit('playerMove', { x: 100, y: 100, nickname: this.playerNickname });
+            console.log('[SOCKET] Emit playerMove (on connect):', { x: 100, y: 100, nickname: this.playerNickname });
+        });
+        this.socket.on('gameState', ({ players }) => {
+            console.log('[SOCKET] Received gameState:', players, 'myId:', this.myId);
+            // 내 id가 players에 없으면, Object.keys(players)[0]을 myId로 임시 할당(테스트용)
+            if (!this.myId || !players[this.myId]) {
+                this.myId = Object.keys(players)[0] || '';
+                console.log('[SOCKET] myId fallback:', this.myId);
+            }
+            // 1. 없는 플레이어 생성
+            Object.entries(players).forEach(([id, info]: [string, any]) => {
+                if (!this.players.has(id)) {
+                    console.log('[PHASER] Creating sprite for player:', id, info);
+                    const sprite = this.physics.add.sprite(info.x, info.y, 'player')
+                        .setScale(0.5)
+                        .setOrigin(0.5, 0.5);
+                    const pr = 20;
+                    sprite.body.setCircle(pr);
+                    sprite.body.setOffset(
+                        sprite.displayWidth/2 - pr,
+                        sprite.displayHeight/2 - pr
+                    );
+                    this.players.set(id, sprite);
+                    // 닉네임 텍스트
+                    const nameText = this.add.text(info.x, info.y - 30, info.nickname, {
+                        fontSize: '18px',
+                        color: '#000000',
+                        fontFamily: 'Arial, sans-serif',
+                        fontStyle: 'bold'
+                    }).setOrigin(0.5);
+                    this.playerNameTexts.set(id, nameText);
+                }
+            });
+            // 2. 위치 갱신
+            Object.entries(players).forEach(([id, info]: [string, any]) => {
+                const sprite = this.players.get(id);
+                const nameText = this.playerNameTexts.get(id);
+                if (sprite) {
+                    // 내 플레이어는 서버 좌표로 덮어쓰지 않는다!
+                    if (id !== this.myId) {
+                        sprite.x = info.x;
+                        sprite.y = info.y;
+                        console.log('[PHASER] Updating sprite position for', id, 'to', info.x, info.y);
+                    }
+                }
+                if (nameText && sprite) {
+                    nameText.setPosition(sprite.x, sprite.y - 30);
+                }
+            });
+            // 3. 사라진 플레이어 제거
+            Array.from(this.players.keys()).forEach((id) => {
+                if (!players[id]) {
+                    console.log('[PHASER] Removing sprite for player:', id);
+                    this.players.get(id)?.destroy();
+                    this.playerNameTexts.get(id)?.destroy();
+                    this.players.delete(id);
+                    this.playerNameTexts.delete(id);
+                }
+            });
+        });
 
         // Keyboard input setup
         this.cursors = this.input.keyboard!.createCursorKeys();
@@ -137,13 +190,16 @@ class RedLightGreenLightScene extends Phaser.Scene {
         } 
 
         // 플레이어와 토큰 충돌/겹침 처리
-       this.physics.add.overlap(
-        this.player,
-        this.tokens,
-        this.handleCollectToken,
-        undefined,
-        this
-    );
+        const myPlayer = this.players.get(this.myId);
+        if (myPlayer) {
+            this.physics.add.overlap(
+                myPlayer,
+                this.tokens,
+                this.handleCollectToken,
+                undefined,
+                this
+            );
+        }
     }
 
     /** 화면 구석구석 랜덤 위치에 토큰 하나를 생성하거나 재배치 */
@@ -166,20 +222,17 @@ class RedLightGreenLightScene extends Phaser.Scene {
   }
 
   /** 플레이어가 토큰과 겹쳤을 때 호출 */
-  private handleCollectToken(
-    player: Phaser.Physics.Arcade.Sprite,
-    token: Phaser.Physics.Arcade.Sprite
-  ) {
+  private handleCollectToken: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
+    player,
+    token
+  ) => {
     const p = player as Phaser.Physics.Arcade.Sprite;
     const t = token as Phaser.Physics.Arcade.Sprite;
-
     // 1) 기존 토큰 제거
     t.disableBody(true, true);
-
     // 2) 카운터 증가 및 UI 갱신
     this.tokenCount++;
     this.tokenCountText.setText(`먹은 토큰: ${this.tokenCount}`);
-
     // 3) 잠시 후 새 토큰 스폰
     this.time.delayedCall(500, () => {
       this.spawnToken();
@@ -193,32 +246,33 @@ class RedLightGreenLightScene extends Phaser.Scene {
      * @param delta - The time elapsed since the last frame.
      */
     update(time: number, delta: number) {
-        // Player movement logic
-        // Reset player velocity
+        // 내 플레이어만 입력 처리
+        const mySprite = this.players.get(this.myId);
+        if (!mySprite || !this.cursors) {
+            console.log('[PHASER] update() - mySprite missing for myId:', this.myId, 'players:', Array.from(this.players.keys()));
+            return;
+        }
         let playerVelocityX = 0;
         let playerVelocityY = 0;
-
         if (this.cursors.left.isDown) {
             playerVelocityX = -this.playerSpeed;
         } else if (this.cursors.right.isDown) {
             playerVelocityX = this.playerSpeed;
         }
-
         if (this.cursors.up.isDown) {
             playerVelocityY = -this.playerSpeed;
         } else if (this.cursors.down.isDown) {
             playerVelocityY = this.playerSpeed;
         }
-
-        // delta 시간에 비례해서 이동 
-        this.player.body.setVelocity(playerVelocityX, playerVelocityY);
-
-        // 화면 밖으로 나가지 않도록 제한 
-        this.player.x = Phaser.Math.Clamp(this.player.x, 20, this.scale.width - 20);
-        this.player.y = Phaser.Math.Clamp(this.player.y, 20, this.scale.height - 20);
-
-        //  닉네임 텍스트가 플레이어 위에 위치하도록 설정 
-        this.playerNameText.setPosition(this.player.x, this.player.y - 30);
+        if (mySprite.body && 'setVelocity' in mySprite.body) {
+            (mySprite.body as Phaser.Physics.Arcade.Body).setVelocity(playerVelocityX, playerVelocityY);
+        }
+        mySprite.x = Phaser.Math.Clamp(mySprite.x, 20, this.scale.width - 20);
+        mySprite.y = Phaser.Math.Clamp(mySprite.y, 20, this.scale.height - 20);
+        this.playerNameTexts.get(this.myId)?.setPosition(mySprite.x, mySprite.y - 30);
+        // 서버로 내 위치 전송
+        this.socket.emit('playerMove', { x: mySprite.x, y: mySprite.y, nickname: this.playerNickname });
+        console.log('[SOCKET] Emit playerMove (on update):', { x: mySprite.x, y: mySprite.y, nickname: this.playerNickname });
     }
 
     /**
@@ -320,19 +374,18 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
 
     useEffect(() => {
         if (gameRef.current && !gameInstance.current) {
+            console.log('[REACT] Creating Phaser.Game instance');
             const config: Phaser.Types.Core.GameConfig = {
                 type: Phaser.AUTO,
-                // 게임의 내부 해상도를 더 작은 값으로 조정하여 100% 확대율에서 전체가 보이도록 합니다.
-                // 800x600에서 720x540으로 추가 조정 (4:3 비율 유지)
                 width: 720, 
                 height: 540, 
                 parent: gameRef.current,
-                backgroundColor: '#F0F0F0', // Light grey background
+                backgroundColor: '#F0F0F0',
                 scale: {
                     mode: Phaser.Scale.RESIZE,
                     autoCenter: Phaser.Scale.CENTER_BOTH
                 },
-                scene: RedLightGreenLightScene, 
+                scene: RedLightGreenLightScene,
                 physics: {
                     default: 'arcade', 
                     arcade: {
@@ -341,10 +394,16 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
                     }
                 }
             };
-
             gameInstance.current = new Phaser.Game(config);
+            // Phaser가 완전히 초기화된 후 scene.start로 데이터 전달
+            setTimeout(() => {
+                if (gameInstance.current) {
+                    // 씬이 이미 시작된 경우에도 start를 호출하면 init이 재실행됨
+                    gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname });
+                    console.log('[REACT] Called scene.start with playerNickname:', playerNickname);
+                }
+            }, 100);
         }
-
         // Cleanup game instance on component unmount
         return () => {
             if (gameInstance.current) {
