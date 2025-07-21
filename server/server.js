@@ -51,10 +51,12 @@ setInterval(() => {
   broadcastYounghee();
 }, 5000);
 
-function broadcastGameState() {
-  io.emit('gameState', { players });
-  broadcastTokens();
-  // youngheeUpdate emit 제거 (setInterval과 on connect에서만 emit)
+function broadcastGameState(roomId) {
+  const room = rooms[roomId];
+  if (!room) return;
+  // console.log(`[SERVER] broadcastGameState to ${roomId}, players:`, Object.keys(room.players));
+  io.to(roomId).emit('gameState', { players: room.players });
+  io.to(roomId).emit('tokensUpdate', room.tokens);
 }
 
 let playerInputs = {};
@@ -62,13 +64,24 @@ const PLAYER_SPEED = 500 / 60; // 500px/sec, 60fps 기준 프레임당 이동량
 
 let waitingPlayers = [];
 const MATCH_SIZE = 2;
+let rooms = {};
+let roomSeq = 1;
 
 io.on('connection', (socket) => {
-  socket.on('joinGame', (data) => {
-    players[socket.id] = { x: 100, y: 100, nickname: data.nickname };
-    playerInputs[socket.id] = { left: false, right: false, up: false, down: false };
-    spawnTokensIfNeeded();
-    broadcastGameState();
+  socket.on('joinGame', ({ roomId, nickname }) => {
+    if (!rooms[roomId]) return;
+    rooms[roomId].players[socket.id] = { x: 100, y: 100, nickname };
+    rooms[roomId].playerInputs = rooms[roomId].playerInputs || {};
+    rooms[roomId].playerInputs[socket.id] = { left: false, right: false, up: false, down: false };
+    // 토큰 초기화(이미 있으면 유지)
+    if (!rooms[roomId].tokens) {
+      rooms[roomId].tokens = [];
+      while (rooms[roomId].tokens.length < MAX_TOKENS) {
+        rooms[roomId].tokens.push(randomToken());
+      }
+    }
+    console.log(`[SERVER] joinGame: roomId=${roomId}, nickname=${nickname}, socketId=${socket.id}`);
+    broadcastGameState(roomId);
   });
 
   // 클라이언트에 현재 토큰 정보 전송
@@ -77,9 +90,9 @@ io.on('connection', (socket) => {
   // 클라이언트에 현재 Younghee 위치 전송
   socket.emit('youngheeUpdate', younghee);
 
-  socket.on('playerInput', (input) => {
-    playerInputs[socket.id] = input;
-    // console.log(`[INPUT] ${socket.id}:`, input); // 로그 제거
+  socket.on('playerInput', ({ roomId, input }) => {
+    if (!rooms[roomId] || !rooms[roomId].playerInputs[socket.id]) return;
+    rooms[roomId].playerInputs[socket.id] = input;
   });
 
   socket.on('playerMove', (data) => {
@@ -91,14 +104,16 @@ io.on('connection', (socket) => {
   });
 
   // 토큰 먹기 이벤트
-  socket.on('collectToken', (tokenId) => {
-    // 해당 토큰 제거
-    const idx = tokens.findIndex(t => t.id === tokenId);
+  socket.on('collectToken', ({ roomId, tokenId }) => {
+    if (!rooms[roomId]) return;
+    const idx = rooms[roomId].tokens.findIndex(t => t.id === tokenId);
     if (idx !== -1) {
-      tokens.splice(idx, 1);
+      rooms[roomId].tokens.splice(idx, 1);
       // 새 토큰 보충
-      spawnTokensIfNeeded();
-      broadcastTokens();
+      while (rooms[roomId].tokens.length < MAX_TOKENS) {
+        rooms[roomId].tokens.push(randomToken());
+      }
+      io.to(roomId).emit('tokensUpdate', rooms[roomId].tokens);
     }
   });
 
@@ -108,7 +123,12 @@ io.on('connection', (socket) => {
       io.emit('matchingCount', waitingPlayers.length);
       if (waitingPlayers.length >= MATCH_SIZE) {
         const matched = waitingPlayers.splice(0, MATCH_SIZE);
-        matched.forEach(s => s.emit('matchFound'));
+        const roomId = `room${roomSeq++}`;
+        rooms[roomId] = { players: {}, tokens: [], created: Date.now() };
+        matched.forEach(s => {
+          s.join(roomId);
+          s.emit('matchFound', { roomId });
+        });
       }
     }
   });
@@ -117,6 +137,14 @@ io.on('connection', (socket) => {
     io.emit('matchingCount', waitingPlayers.length);
   });
   socket.on('disconnect', () => {
+    // 모든 방에서 플레이어 제거
+    Object.entries(rooms).forEach(([roomId, room]) => {
+      if (room.players[socket.id]) {
+        delete room.players[socket.id];
+        delete room.playerInputs[socket.id];
+        broadcastGameState(roomId);
+      }
+    });
     waitingPlayers = waitingPlayers.filter(s => s !== socket);
     delete players[socket.id];
     delete playerInputs[socket.id];
@@ -124,24 +152,21 @@ io.on('connection', (socket) => {
   });
 });
 
-// 60fps 기준으로 위치 계산 및 broadcast
+// 60fps 기준으로 위치 계산 및 broadcast (방별로)
 setInterval(() => {
-  for (const id in players) {
-    const input = playerInputs[id] || {};
-    let dx = 0, dy = 0;
-    if (input.left) dx -= PLAYER_SPEED;
-    if (input.right) dx += PLAYER_SPEED;
-    if (input.up) dy -= PLAYER_SPEED;
-    if (input.down) dy += PLAYER_SPEED;
-    const oldX = players[id].x;
-    const oldY = players[id].y;
-    players[id].x = Math.max(20, Math.min(1920 - 20, players[id].x + dx));
-    players[id].y = Math.max(20, Math.min(1080 - 20, players[id].y + dy));
-    if (dx !== 0 || dy !== 0) {
-      // console.log(`[MOVE] ${id}: (${oldX}, ${oldY}) -> (${players[id].x}, ${players[id].y})`); // 로그 제거
+  Object.entries(rooms).forEach(([roomId, room]) => {
+    for (const id in room.players) {
+      const input = room.playerInputs[id] || {};
+      let dx = 0, dy = 0;
+      if (input.left) dx -= PLAYER_SPEED;
+      if (input.right) dx += PLAYER_SPEED;
+      if (input.up) dy -= PLAYER_SPEED;
+      if (input.down) dy += PLAYER_SPEED;
+      room.players[id].x = Math.max(20, Math.min(1920 - 20, room.players[id].x + dx));
+      room.players[id].y = Math.max(20, Math.min(1080 - 20, room.players[id].y + dy));
     }
-  }
-  broadcastGameState();
+    broadcastGameState(roomId);
+  });
 }, 1000/60);
 
 server.listen(process.env.PORT || 3001, () => {

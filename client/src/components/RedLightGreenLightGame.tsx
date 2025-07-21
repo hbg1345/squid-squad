@@ -26,6 +26,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
     private myId: string = '';
     private playerNickname: string = '';
     private youngheeListenerRegistered = false;
+    private roomId: string = '';
 
     private visionAngle: number     = 60;   // 콘의 벌어짐 각도 (°)
     private visionDirection: number = 270;  // 시야가 향하는 기본 방향 (°)
@@ -49,10 +50,13 @@ class RedLightGreenLightScene extends Phaser.Scene {
      * Initializes the scene with data passed from the React component.
      * @param data - Data object containing the player's nickname.
      */
-    init(data: { playerNickname: string }) {
-        // Phaser에서 scene.start로 전달된 데이터는 this.sys.settings.data에 있음
-        const nickname = data?.playerNickname || ((this.sys.settings.data as { playerNickname?: string })?.playerNickname) || '';
+    init(data: { playerNickname: string, roomId?: string }) {
+        const settingsData = this.sys.settings.data as { playerNickname?: string, roomId?: string };
+        const nickname = data?.playerNickname || settingsData?.playerNickname || '';
+        const roomId = data?.roomId || settingsData?.roomId || '';
+        console.log('[LOG] RedLightGreenLightScene.init', data, settingsData);
         this.playerNickname = nickname;
+        this.roomId = roomId;
     }
 
     /**
@@ -71,8 +75,8 @@ class RedLightGreenLightScene extends Phaser.Scene {
      */
     create() {
         this.myId = this.socket.id ?? '';
-        // 게임 입장 시 서버에 joinGame 이벤트 전송
-        this.socket.emit('joinGame', { nickname: this.playerNickname });
+        console.log('[CLIENT] create() called, roomId:', this.roomId);
+        this.socket.emit('joinGame', { roomId: this.roomId, nickname: this.playerNickname });
         // Set a light grey background color as in the image
         this.cameras.main.setBackgroundColor('#F0F0F0');
 
@@ -231,7 +235,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
         };
         // 입력 상태가 바뀌었을 때만 emit
         if (JSON.stringify(input) !== JSON.stringify(this.lastInputState)) {
-            this.socket.emit('playerInput', input);
+            this.socket.emit('playerInput', { roomId: this.roomId, input });
             this.lastInputState = input;
         }
     }
@@ -245,7 +249,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
       const tokenId = t.getData('id');
       if (typeof tokenId === 'number') {
         // 서버에 토큰 먹기 알림
-        this.socket.emit('collectToken', tokenId);
+        this.socket.emit('collectToken', { roomId: this.roomId, tokenId });
         // 내 토큰 카운트만 증가
         this.tokenCount++;
         this.tokenCountText.setText(`먹은 토큰: ${this.tokenCount}`);
@@ -311,9 +315,11 @@ class RedLightGreenLightScene extends Phaser.Scene {
 type RedLightGreenLightGameProps = {
     onGoBack: () => void;
     playerNickname: string;
+    roomId?: string;
 };
 
-const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBack, playerNickname }) => {
+const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBack, playerNickname, roomId }) => {
+    console.log('[LOG] RedLightGreenLightGame props', { playerNickname, roomId });
     const gameRef = useRef<HTMLDivElement>(null);
     const gameInstance = useRef<Phaser.Game | null>(null);
 
@@ -322,8 +328,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             gameRef.current.tabIndex = 0;
             gameRef.current.focus();
         }
-        if (gameRef.current && !gameInstance.current) {
-            console.log('[REACT] Creating Phaser.Game instance');
+        if (!gameInstance.current) {
             const width = window.innerWidth;
             const height = window.innerHeight;
             const config: Phaser.Types.Core.GameConfig = {
@@ -346,23 +351,26 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
                 }
             };
             gameInstance.current = new Phaser.Game(config);
-            // Phaser가 완전히 초기화된 후 scene.start로 데이터 전달
             setTimeout(() => {
                 if (gameInstance.current) {
-                    // 씬이 이미 시작된 경우에도 start를 호출하면 init이 재실행됨
-                    gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname });
-                    console.log('[REACT] Called scene.start with playerNickname:', playerNickname);
+                    gameInstance.current.scene.stop('RedLightGreenLightScene');
+                    console.log('[LOG] scene.start with', { playerNickname, roomId });
+                    gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname, roomId });
                 }
             }, 100);
+        } else {
+            // Phaser 인스턴스가 이미 있으면 scene.stop 후 scene.start
+            gameInstance.current.scene.stop('RedLightGreenLightScene');
+            console.log('[LOG] scene.start (existing instance) with', { playerNickname, roomId });
+            gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname, roomId });
         }
-        // Cleanup game instance on component unmount
         return () => {
             if (gameInstance.current) {
                 gameInstance.current.destroy(true); 
                 gameInstance.current = null;
             }
         };
-    }, [playerNickname]); 
+    }, [playerNickname, roomId]); 
 
     const handleGoBack = () => {
         onGoBack();

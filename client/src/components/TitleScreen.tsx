@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import './TitleScreen.css';
 import { socket } from '../socket';
 import MatchingModal from '../MatchingModal';
+import { useNavigate } from 'react-router-dom';
 
 // Squid Game style title screen scene
 class SquidGameTitleScene extends Phaser.Scene {
@@ -343,7 +344,7 @@ class SquidGameTitleScene extends Phaser.Scene {
 }
 
 type TitleScreenProps = {
-    onStartGame: () => void;
+    onStartGame: (roomId?: string) => void;
 };
 
 const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
@@ -357,6 +358,8 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
     const [elapsed, setElapsed] = useState(0);
     const [matchingCurrent, setMatchingCurrent] = useState(1); // 본인 포함
     const [matchingTotal] = useState(2); // 매칭 인원수 2명
+    const [roomId, setRoomId] = useState<string | null>(null);
+    const [nickname, setNickname] = useState('');
 
     /**
      * React useEffect hook:
@@ -410,9 +413,12 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
 
     useEffect(() => {
         const handleMatchingCount = (count: number) => setMatchingCurrent(count);
-        const handleMatchFound = () => {
+        const handleMatchFound = ({ roomId }: { roomId: string }) => {
+            console.log('[LOG] matchFound', roomId, nickname);
+            setRoomId(roomId);
+            console.log('[LOG] setRoomId', roomId);
             setShowMatchingModal(false);
-            onStartGame();
+            onStartGame(roomId, nickname);
         };
         socket.on('matchingCount', handleMatchingCount);
         socket.on('matchFound', handleMatchFound);
@@ -420,7 +426,7 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
             socket.off('matchingCount', handleMatchingCount);
             socket.off('matchFound', handleMatchFound);
         };
-    }, [onStartGame]);
+    }, [onStartGame, nickname]);
 
     /**
      * Handler for when the "Start Game" button is clicked.
@@ -434,6 +440,14 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
 
     return (
         <div className="title-screen">
+            {/* 닉네임 입력 UI 추가 */}
+            <input
+                type="text"
+                value={nickname}
+                onChange={e => setNickname(e.target.value)}
+                placeholder="닉네임 입력"
+                className="nickname-input"
+            />
             {/* Container where the Phaser game will be rendered */}
             <div ref={gameRef} className="game-container" />
 
@@ -459,4 +473,12 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
     );
 };
 
-export default TitleScreen;
+const TitleScreenWithNav: React.FC = () => {
+  const navigate = useNavigate();
+  return <TitleScreen onStartGame={(roomId, playerNickname) => {
+    console.log('[LOG] navigate to /game', roomId, playerNickname);
+    navigate('/game', { state: { roomId, playerNickname } });
+  }} />;
+};
+
+export default TitleScreenWithNav;
