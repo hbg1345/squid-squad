@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import './TitleScreen.css';
-import { socket } from '../socket';
+import { getSocket } from '../socket';
 import MatchingModal from '../MatchingModal';
 import { useNavigate } from 'react-router-dom';
 import { MATCH_SIZE } from '../constants/game';
@@ -405,9 +405,9 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
         let timer: NodeJS.Timeout;
         if (showMatchingModal) {
             setElapsed(0);
-            socket.emit('joinMatch');
+            getSocket().emit('joinMatch');
         } else {
-            socket.emit('leaveMatch');
+            getSocket().emit('leaveMatch');
         }
         return () => { if (timer) clearInterval(timer); };
     }, [showMatchingModal]);
@@ -421,11 +421,11 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
             setShowMatchingModal(false);
             onStartGame(roomId, nickname);
         };
-        socket.on('matchingCount', handleMatchingCount);
-        socket.on('matchFound', handleMatchFound);
+        getSocket().on('matchingCount', handleMatchingCount);
+        getSocket().on('matchFound', handleMatchFound);
         return () => {
-            socket.off('matchingCount', handleMatchingCount);
-            socket.off('matchFound', handleMatchFound);
+            getSocket().off('matchingCount', handleMatchingCount);
+            getSocket().off('matchFound', handleMatchFound);
         };
     }, [onStartGame, nickname]);
 

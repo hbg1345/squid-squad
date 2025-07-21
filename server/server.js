@@ -1,6 +1,7 @@
 const http = require('http');
 const { Server } = require('socket.io');
 require('dotenv').config();
+const { MATCH_SIZE, MAX_TOKENS } = require('../shared/constants');
 
 const server = http.createServer();
 const io = new Server(server, { cors: { origin: '*' } });
@@ -8,7 +9,6 @@ const io = new Server(server, { cors: { origin: '*' } });
 let players = {};
 let tokens = [];
 const TOKEN_KEYS = ['token1', 'token2'];
-const MAX_TOKENS = 20;
 let nextTokenId = 1;
 
 // Younghee(영희) 위치만 동기화
@@ -66,7 +66,6 @@ let playerInputs = {};
 const PLAYER_SPEED = 500 / 60; // 500px/sec, 60fps 기준 프레임당 이동량
 
 let waitingPlayers = [];
-const MATCH_SIZE = 2;
 let rooms = {};
 let roomSeq = 1;
 
@@ -125,6 +124,13 @@ io.on('connection', (socket) => {
       io.to(roomId).emit('tokensUpdate', rooms[roomId].tokens);
       console.log(`[SERVER] tokensUpdate emitted for room ${roomId}:`, rooms[roomId].tokens);
     }
+  });
+
+  socket.on('playerDead', ({ roomId }) => {
+    if (!rooms[roomId]) return;
+    delete rooms[roomId].players[socket.id];
+    delete rooms[roomId].playerInputs[socket.id];
+    broadcastGameState(roomId);
   });
 
   socket.on('joinMatch', () => {

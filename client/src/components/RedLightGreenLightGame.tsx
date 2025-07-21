@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import './RedLightGreenLight.css';
-import { socket } from '../socket';
+import { getSocket, disconnectSocket } from '../socket';
 import { useNavigate } from 'react-router-dom';
 
 // Vite 환경변수 타입 선언 (없으면 추가)
@@ -21,7 +21,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
     private youngheeVisionGraphics!: Phaser.GameObjects.Graphics;
     private youngheeVisionLineGraphics!: Phaser.GameObjects.Graphics;
     private youngheeMoveTimer!: Phaser.Time.TimerEvent;
-    private socket = socket;
+    private socket = getSocket();
     private players: Map<string, Phaser.GameObjects.Sprite> = new Map();
     private playerNameTexts: Map<string, Phaser.GameObjects.Text> = new Map();
     private myId: string = '';
@@ -31,7 +31,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
 
     private visionAngle: number     = 60;   // 콘의 벌어짐 각도 (°)
     private visionDirection: number = 270;  // 시야가 향하는 기본 방향 (°)
-    private visionDistance: number  = 600;  // 시야가 뻗어나가는 거리 (px)
+    private visionDistance: number  = 300;  // 시야가 뻗어나가는 거리 (px, 기존의 절반)
 
     //tokens
     private tokens!: Phaser.Physics.Arcade.Group;
@@ -275,6 +275,18 @@ class RedLightGreenLightScene extends Phaser.Scene {
       }
     }
 
+    /**
+     * Younghee의 시야(원형) 안에 플레이어가 있는지 판정
+     */
+    private isInYoungheeVision(x: number, y: number): boolean {
+        if (!this.younghee || !this.younghee.displayHeight || !this.younghee.texture) return false;
+        const eyeX = this.younghee.x;
+        const eyeY = this.younghee.y - (this.younghee.displayHeight / 2) + (this.younghee.displayHeight * 0.35) + 40;
+        const dx = x - eyeX;
+        const dy = y - eyeY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        return distance <= this.visionDistance;
+    }
 
     /**
      * Called every frame to update game logic.
@@ -292,6 +304,17 @@ class RedLightGreenLightScene extends Phaser.Scene {
             up: this.cursors.up.isDown,
             down: this.cursors.down.isDown
         };
+        // 움직임이 있을 때 Younghee 시야 체크
+        const isMoving = input.left || input.right || input.up || input.down;
+        if (isMoving && this.isInYoungheeVision(mySprite.x, mySprite.y)) {
+            // 서버에 죽음 알림
+            this.socket.emit('playerDead', { roomId: this.roomId });
+            // React로 dead phase 전달
+            if (typeof window !== 'undefined' && (window as any).onDeadByYounghee) {
+                (window as any).onDeadByYounghee();
+            }
+            return; // 더 이상 update 진행 X
+        }
         // 키 입력 상태 콘솔 출력 제거
         if (JSON.stringify(input) !== JSON.stringify(this.lastInputState)) {
             this.socket.emit('playerInput', input);
@@ -400,6 +423,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
                 gameInstance.current.destroy(true);
                 gameInstance.current = null;
             }
+            disconnectSocket(); // 소켓 연결 해제
             onGoBack();
         }
         if (phase !== 'dead') {
@@ -419,7 +443,11 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     // window에 콜백을 등록해서 Phaser에서 호출하도록 연결
     useEffect(() => {
         (window as any).onCollectToken = () => setTokenCount(c => c + 1);
-        return () => { delete (window as any).onCollectToken; };
+        (window as any).onDeadByYounghee = () => setPhase('dead');
+        return () => { 
+            delete (window as any).onCollectToken;
+            delete (window as any).onDeadByYounghee;
+        };
     }, []);
 
     useEffect(() => {
