@@ -1,17 +1,23 @@
-import TitleScreen from './components/TitleScreen'
-import MatchingModal from './MatchingModal'
-import { useState } from 'react'
-import './App.css'
+import React from 'react';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import TitleScreen from './components/TitleScreen';
+import RedLightGreenLightGame from './components/RedLightGreenLightGame';
 
-function App() {
-  const [matching, setMatching] = useState(false)
-
+const App: React.FC = () => {
   return (
-    <div className="App">
-      <TitleScreen onStartGame={() => setMatching(true)} />
-      <MatchingModal open={matching} onCancel={() => setMatching(false)} />
-    </div>
-  )
-}
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<TitleScreenWithNav />} />
+        <Route path="/game" element={<RedLightGreenLightGame />} />
+      </Routes>
+    </BrowserRouter>
+  );
+};
 
-export default App 
+// useNavigate를 TitleScreen에 연결
+const TitleScreenWithNav: React.FC = () => {
+  const navigate = useNavigate();
+  return <TitleScreen onStartGame={() => navigate('/game')} />;
+};
+
+export default App;
