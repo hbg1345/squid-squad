@@ -1,5 +1,6 @@
 const http = require('http');
 const { Server } = require('socket.io');
+require('dotenv').config();
 
 const server = http.createServer();
 const io = new Server(server, { cors: { origin: '*' } });
@@ -93,6 +94,6 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(3001, () => {
-  console.log('Socket.io server running on port 3001');
+server.listen(process.env.PORT || 3001, () => {
+  console.log(`Socket.io server running on port ${process.env.PORT || 3001}`);
 }); 

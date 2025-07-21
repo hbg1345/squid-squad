@@ -3,6 +3,16 @@ import Phaser from 'phaser';
 import './RedLightGreenLight.css';
 import { io, Socket } from 'socket.io-client';
 
+// Vite 환경변수 타입 선언 (없으면 추가)
+declare global {
+  interface ImportMeta {
+    readonly env: {
+      VITE_SOCKET_URL: string;
+      [key: string]: string;
+    };
+  }
+}
+
 // Red Light, Green Light Game Scene
 class RedLightGreenLightScene extends Phaser.Scene {
     private survivorText!: Phaser.GameObjects.Text;
@@ -63,7 +73,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
     create() {
         // 소켓이 없으면 새로 연결
         if (!this.socket) {
-            this.socket = io('http://localhost:3001');
+            this.socket = io(import.meta.env.VITE_SOCKET_URL);
             this.socket.on('connect', () => {
                 this.myId = this.socket.id ?? '';
                 console.log('[SOCKET] Connected! myId:', this.myId);
