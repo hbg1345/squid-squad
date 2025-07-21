@@ -340,15 +340,17 @@ class SquidGameTitleScene extends Phaser.Scene {
     }
 }
 
-interface TitleScreenProps {
-  onStartGame: () => void
-  onTestGame?: () => void // 테스트용 prop 추가
-}
+type TitleScreenProps = {
+    onStartGame: () => void;
+};
 
-const TitleScreen = ({ onStartGame, onTestGame }: TitleScreenProps) => {
-  const gameRef = useRef<HTMLDivElement>(null)
-  const gameInstance = useRef<Phaser.Game | null>(null)
-  const [showStartButton, setShowStartButton] = useState(false)
+const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
+    // Reference to the DOM element where the Phaser game will be rendered.
+    const gameRef = useRef<HTMLDivElement>(null);
+    // Reference to the Phaser game instance.
+    const gameInstance = useRef<Phaser.Game | null>(null);
+    // State variable to control the visibility of the "Start Game" button.
+    const [showStartButton, setShowStartButton] = useState(false);
 
     /**
      * React useEffect hook:
@@ -411,10 +413,6 @@ const TitleScreen = ({ onStartGame, onTestGame }: TitleScreenProps) => {
                         Start Game
                     </button>
                 </div>
-            )}
-            {/* 테스트용 게임 화면 진입 버튼 */}
-            {onTestGame && (
-                <button onClick={onTestGame}>게임 화면 테스트</button>
             )}
         </div>
     );
