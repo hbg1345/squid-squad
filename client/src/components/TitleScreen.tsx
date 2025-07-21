@@ -4,7 +4,7 @@ import './TitleScreen.css';
 import { getSocket } from '../socket';
 import MatchingModal from '../MatchingModal';
 import { useNavigate } from 'react-router-dom';
-import { MATCH_SIZE } from '../constants/game';
+import { MATCH_SIZE } from '../constants/game'; // MATCH_SIZE는 2로 설정되어 있어야 함
 
 // Squid Game style title screen scene
 class SquidGameTitleScene extends Phaser.Scene {
