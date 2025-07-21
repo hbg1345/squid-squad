@@ -60,6 +60,9 @@ function broadcastGameState() {
 let playerInputs = {};
 const PLAYER_SPEED = 500 / 60; // 500px/sec, 60fps 기준 프레임당 이동량
 
+let waitingPlayers = [];
+const MATCH_SIZE = 2;
+
 io.on('connection', (socket) => {
   players[socket.id] = { x: 100, y: 100, nickname: `플레이어${socket.id.slice(-4)}` };
   playerInputs[socket.id] = { left: false, right: false, up: false, down: false };
@@ -97,7 +100,22 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('joinMatch', () => {
+    if (!waitingPlayers.includes(socket)) {
+      waitingPlayers.push(socket);
+      io.emit('matchingCount', waitingPlayers.length);
+      if (waitingPlayers.length >= MATCH_SIZE) {
+        const matched = waitingPlayers.splice(0, MATCH_SIZE);
+        matched.forEach(s => s.emit('matchFound'));
+      }
+    }
+  });
+  socket.on('leaveMatch', () => {
+    waitingPlayers = waitingPlayers.filter(s => s !== socket);
+    io.emit('matchingCount', waitingPlayers.length);
+  });
   socket.on('disconnect', () => {
+    waitingPlayers = waitingPlayers.filter(s => s !== socket);
     delete players[socket.id];
     delete playerInputs[socket.id];
     broadcastGameState();

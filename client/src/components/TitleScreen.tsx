@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import './TitleScreen.css';
+import { socket } from '../socket';
 import MatchingModal from '../MatchingModal';
 
 // Squid Game style title screen scene
@@ -354,8 +355,8 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
     const [showStartButton, setShowStartButton] = useState(false);
     const [showMatchingModal, setShowMatchingModal] = useState(false);
     const [elapsed, setElapsed] = useState(0);
-    const [matchingCurrent, setMatchingCurrent] = useState(2); // 예시값
-    const [matchingTotal, setMatchingTotal] = useState(4); // 예시값
+    const [matchingCurrent, setMatchingCurrent] = useState(1); // 본인 포함
+    const [matchingTotal] = useState(2); // 매칭 인원수 2명
 
     /**
      * React useEffect hook:
@@ -400,20 +401,32 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
         let timer: NodeJS.Timeout;
         if (showMatchingModal) {
             setElapsed(0);
-            timer = setInterval(() => setElapsed(e => e + 1), 1000);
+            socket.emit('joinMatch');
+        } else {
+            socket.emit('leaveMatch');
         }
         return () => { if (timer) clearInterval(timer); };
     }, [showMatchingModal]);
+
+    useEffect(() => {
+        const handleMatchingCount = (count: number) => setMatchingCurrent(count);
+        const handleMatchFound = () => {
+            setShowMatchingModal(false);
+            onStartGame();
+        };
+        socket.on('matchingCount', handleMatchingCount);
+        socket.on('matchFound', handleMatchFound);
+        return () => {
+            socket.off('matchingCount', handleMatchingCount);
+            socket.off('matchFound', handleMatchFound);
+        };
+    }, [onStartGame]);
 
     /**
      * Handler for when the "Start Game" button is clicked.
      */
     const handleStartGame = () => {
         setShowMatchingModal(true);
-        setTimeout(() => {
-            setShowMatchingModal(false);
-            onStartGame();
-        }, 2000); // 2초 후 매칭 완료
     };
     const handleCancelMatching = () => {
         setShowMatchingModal(false);

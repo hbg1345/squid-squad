@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import './RedLightGreenLight.css';
-import { io, Socket } from 'socket.io-client';
+import { socket } from '../socket';
 
 // Vite 환경변수 타입 선언 (없으면 추가)
 declare global {
@@ -20,7 +20,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
     private youngheeVisionGraphics!: Phaser.GameObjects.Graphics;
     private youngheeVisionLineGraphics!: Phaser.GameObjects.Graphics;
     private youngheeMoveTimer!: Phaser.Time.TimerEvent;
-    private socket!: Socket;
+    private socket = socket;
     private players: Map<string, Phaser.GameObjects.Sprite> = new Map();
     private playerNameTexts: Map<string, Phaser.GameObjects.Text> = new Map();
     private myId: string = '';
@@ -71,12 +71,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
      */
     create() {
         // 소켓이 없으면 새로 연결
-        if (!this.socket) {
-            this.socket = io(import.meta.env.VITE_SOCKET_URL);
-            this.socket.on('connect', () => {
-                this.myId = this.socket.id ?? '';
-            });
-        }
+        this.myId = this.socket.id ?? '';
         // Set a light grey background color as in the image
         this.cameras.main.setBackgroundColor('#F0F0F0');
 
