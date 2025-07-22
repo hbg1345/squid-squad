@@ -20,6 +20,7 @@ type PlayerState = {
   y: number;
   nickname: string;
   roomIndex: number | null;
+  character?: string;
 };
 
 type RoomScreenProps = {
@@ -40,11 +41,19 @@ const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, all
   useEffect(() => {
     const socket = getSocket();
     class RoomScene extends Phaser.Scene {
-      playerSprites: { [id: string]: Phaser.GameObjects.Arc } = {};
+      playerSprites: { [id: string]: Phaser.GameObjects.Sprite } = {};
       nameTexts: { [id: string]: Phaser.GameObjects.Text } = {};
       cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
       interactKey!: Phaser.Input.Keyboard.Key;
       graphics!: Phaser.GameObjects.Graphics;
+
+      preload() {
+        this.load.image('player', '/player.png');
+        this.load.image('player2', '/player2.png');
+        this.load.image('player3', '/player3.png');
+        this.load.image('player4', '/player4.png');
+        this.load.image('player5', '/player5.png');
+      }
 
       create() {
         this.cameras.main.setBackgroundColor('#333333');
@@ -102,11 +111,12 @@ const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, all
 
         roomPlayers.forEach(([id, info]) => {
           if (!this.playerSprites[id]) {
-            this.playerSprites[id] = this.add.circle(0, 0, PLAYER_RADIUS, id === myId ? 0xff2a7f : 0x00bfff);
+            let spriteKey = (info.character || 'player').replace('.png', '');
+            this.playerSprites[id] = this.add.sprite(0, 0, spriteKey).setScale(0.5).setOrigin(0.5);
             this.nameTexts[id] = this.add.text(0, 0, info.nickname, { fontSize: '16px', color: '#fff' }).setOrigin(0.5);
           }
           this.playerSprites[id].setPosition(centerX + info.x, centerY + info.y);
-          this.nameTexts[id].setPosition(centerX + info.x, centerY + info.y - PLAYER_RADIUS - 10);
+          this.nameTexts[id].setPosition(centerX + info.x, centerY + info.y - 40);
         });
 
         Object.keys(this.playerSprites).forEach(id => {
@@ -276,7 +286,7 @@ const GameScreen = () => {
     }
     if (!phaserRef.current || gameRef.current) return;
 
-    let playerSprites: { [id: string]: Phaser.GameObjects.Arc } = {};
+    let playerSprites: { [id: string]: Phaser.GameObjects.Sprite } = {};
     let nameTexts: { [id: string]: Phaser.GameObjects.Text } = {};
 
     class PairScene extends Phaser.Scene {
@@ -286,6 +296,14 @@ const GameScreen = () => {
       interactKey!: Phaser.Input.Keyboard.Key;
       quotaTexts: Phaser.GameObjects.Text[] = [];
       isChattingRef!: React.RefObject<boolean>;
+
+      preload() {
+        this.load.image('player', '/player.png');
+        this.load.image('player2', '/player2.png');
+        this.load.image('player3', '/player3.png');
+        this.load.image('player4', '/player4.png');
+        this.load.image('player5', '/player5.png');
+      }
 
       init(data: { isChattingRef: React.RefObject<boolean> }) {
         this.isChattingRef = data.isChattingRef;
@@ -382,13 +400,12 @@ const GameScreen = () => {
 
         mainPlayers.forEach(([id, info]) => {
           if (!playerSprites[id]) {
-            const isMe = id === myIdRef.current;
-            playerSprites[id] = this.add.circle(0, 0, PLAYER_RADIUS, isMe ? 0xff2a7f : 0x00bfff);
-            playerSprites[id].setStrokeStyle(3, 0xffffff);
+            let spriteKey = (info.character || 'player').replace('.png', '');
+            playerSprites[id] = this.add.sprite(0, 0, spriteKey).setScale(0.5).setOrigin(0.5);
             nameTexts[id] = this.add.text(0, 0, info.nickname, { fontSize: '16px', color: '#fff' }).setOrigin(0.5);
           }
           playerSprites[id].setPosition(centerX + info.x, centerY + info.y);
-          nameTexts[id].setPosition(centerX + info.x, centerY + info.y - PLAYER_RADIUS - 10);
+          nameTexts[id].setPosition(centerX + info.x, centerY + info.y - 40);
         });
 
         Object.keys(playerSprites).forEach(id => {
