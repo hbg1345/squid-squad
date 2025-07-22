@@ -476,7 +476,7 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
 const TitleScreenWithNav: React.FC = () => {
   const navigate = useNavigate();
   return <TitleScreen onStartGame={(roomId, playerNickname) => {
-    navigate('/game', { state: { roomId, playerNickname } });
+    navigate('/game1', { state: { roomId, playerNickname } });
   }} />;
 };
 

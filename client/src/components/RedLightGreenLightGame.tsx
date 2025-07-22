@@ -49,9 +49,11 @@ class RedLightGreenLightScene extends Phaser.Scene {
     private handleYoungheeUpdate: any;
 
     // 충돌 처리
-    private pushKey!: Phaser.Input.Keyboard.Key;
+    private pushKey!: Phaser.Input.Keyboard.Key | undefined;
     private pushRadius: number = 600; // 푸쉬 반경 (px)
     private pushStrength: number = 300; // 푸쉬 강도 (px/s) 
+
+    private lastInputState: { left: boolean, right: boolean, up: boolean, down: boolean } = { left: false, right: false, up: false, down: false };
 
     constructor() {
         super({ key: 'RedLightGreenLightScene' });
@@ -201,7 +203,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
         // Keyboard input setup
         this.cursors = this.input.keyboard!.createCursorKeys();
         // 키 입력 상태 추적용
-        this.lastInputState = { left: false, right: false, up: false, down: false };
         this.input.keyboard!.on('keydown', this.handleKeyInput, this);
         this.input.keyboard!.on('keyup', this.handleKeyInput, this);
 
@@ -215,22 +216,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
           .setOrigin(1, 0); // 오른쪽 상단에 위치
         // 토큰 그룹 생성
         this.tokens = this.physics.add.group();
-
-        // 서버에서 토큰 정보 수신
-        this.socket.on('tokensUpdate', (tokens) => {
-          // 기존 토큰 모두 제거
-          this.tokens.clear(true, true);
-          // 서버에서 받은 토큰만 다시 생성
-          tokens.forEach((token: any) => {
-            const t = this.physics.add.sprite(token.x, token.y, token.key)
-              .setScale(0.3)
-              .setOrigin(0.5);
-            t.setData('id', token.id);
-            t.body.setCircle(16);
-            t.body.setOffset(t.displayWidth/2 - 16, t.displayHeight/2 - 16);
-            this.tokens.add(t);
-          });
-        });
 
         // 플레이어와 토큰 충돌/겹침 처리
         const myPlayer = this.players.get(this.myId);
@@ -281,6 +266,23 @@ class RedLightGreenLightScene extends Phaser.Scene {
           (window as any).onCollectToken();
         }
       }
+    }
+
+    /**
+     * Handles keyboard input events for movement and emits to server if changed
+     */
+    private handleKeyInput() {
+        const input = {
+            left: this.cursors.left.isDown,
+            right: this.cursors.right.isDown,
+            up: this.cursors.up.isDown,
+            down: this.cursors.down.isDown
+        };
+        // 입력 상태가 바뀌었을 때만 emit
+        if (JSON.stringify(input) !== JSON.stringify(this.lastInputState)) {
+            this.socket.emit('playerInput', { roomId: this.roomId, input });
+            this.lastInputState = { ...input };
+        }
     }
 
     /**
@@ -378,11 +380,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
             }
         }
         }
-        // 키 입력 상태 콘솔 출력 제거
-        if (JSON.stringify(input) !== JSON.stringify(this.lastInputState)) {
-            this.socket.emit('playerInput', input);
-            this.lastInputState = { ...input };
-        }
         this.playerNameTexts.forEach((nameText, id) => {
             const sprite = this.players.get(id);
             if (sprite) {
@@ -476,12 +473,12 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
         }
     }, [phase, timer, tokenCount]);
 
-    // survived phase가 되면 GameScreen(/room)으로 이동
+    // survived phase가 되면 PairGameScreen(/game2)으로 이동
     useEffect(() => {
         if (phase === 'survived') {
-            navigate('/room');
+            navigate('/game2', { state: { roomId, playerNickname } });
         }
-    }, [phase, navigate]);
+    }, [phase, navigate, roomId, playerNickname]);
 
     // dead phase가 되면 자동으로 타이틀로 이동 + Phaser 인스턴스 안전 파괴 (중복 방지)
     const alreadyDead = useRef(false);

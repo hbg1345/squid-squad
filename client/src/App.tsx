@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import TitleScreen from './components/TitleScreen';
 import RedLightGreenLightGame from './components/RedLightGreenLightGame';
-import GameScreen from './components/GameScreen';
+import GameScreen from './components/PairGameScreen';
 
 const RedLightGreenLightGameWrapper = () => {
   const location = useLocation();
@@ -22,8 +22,8 @@ const App: React.FC = () => {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<TitleScreenWithNav />} />
-        <Route path="/game" element={<RedLightGreenLightGameWrapper />} />
-        <Route path="/room" element={<GameScreen />} />
+        <Route path="/game1" element={<RedLightGreenLightGameWrapper />} />
+        <Route path="/game2" element={<GameScreen />} />
       </Routes>
     </BrowserRouter>
   );
@@ -32,7 +32,7 @@ const App: React.FC = () => {
 // useNavigate를 TitleScreen에 연결
 const TitleScreenWithNav: React.FC = () => {
   const navigate = useNavigate();
-  return <TitleScreen onStartGame={(roomId: string, playerNickname: string) => navigate('/game', { state: { roomId, playerNickname } })} />;
+  return <TitleScreen onStartGame={(roomId: string, playerNickname: string) => navigate('/game1', { state: { roomId, playerNickname } })} />;
 };
 
 export default App;
