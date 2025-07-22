@@ -652,6 +652,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
               title="무궁화 꽃이 피었습니다"
               description={[
                 "술래가 뒤를 돌아볼 때 움직이면 탈락합니다.",
+                "술래의 시야에 닿으면 미니게임을 진행해야 합니다.",
                 "제한 시간 내에 20개의 토큰 중 1개 이상을 획득하여 술래에게 돌아오세요.",
               ]}
             />
