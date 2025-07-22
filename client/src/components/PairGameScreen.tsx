@@ -6,6 +6,11 @@ import { getSocket } from '../socket';
 const PLAYER_RADIUS = 16;
 const PLAYER_MOVE_SPEED = 180;
 const CIRCLE_RADIUS = 200;
+const DOOR_COUNT = 10;
+const DOOR_WIDTH = 32;
+const DOOR_HEIGHT = 48;
+const DOOR_RADIUS = CIRCLE_RADIUS + 150;
+const ROTATION_SPEED = 0.5; // radians per second
 
 const GameScreen = () => {
   const location = useLocation();
@@ -80,10 +85,19 @@ const GameScreen = () => {
     class PairScene extends Phaser.Scene {
       cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
       graphics!: Phaser.GameObjects.Graphics;
+      doorPositions: { x: number; y: number; angle: number }[] = [];
+      doorRotation = 0;
 
       create() {
         this.cursors = this.input.keyboard!.createCursorKeys();
         this.graphics = this.add.graphics();
+
+        for (let i = 0; i < DOOR_COUNT; i++) {
+          const angle = (i / DOOR_COUNT) * Math.PI * 2;
+          const x = Math.cos(angle) * DOOR_RADIUS;
+          const y = Math.sin(angle) * DOOR_RADIUS;
+          this.doorPositions.push({ x, y, angle });
+        }
       }
 
       update(time: number, delta: number) {
@@ -91,6 +105,10 @@ const GameScreen = () => {
         const mainCam = this.cameras.main;
         const centerX = mainCam.width / 2;
         const centerY = mainCam.height / 2;
+
+        if (phaseRef.current === 'playing') {
+          this.doorRotation += ROTATION_SPEED * dt;
+        }
 
         // Handle player input
         const myPlayer = allPlayersRef.current[myIdRef.current!];
@@ -127,6 +145,22 @@ const GameScreen = () => {
 
         // --- Rendering ---
         this.graphics.clear();
+
+        // Draw doors
+        this.graphics.fillStyle(0x0000ff, 1); // Blue
+        this.doorPositions.forEach(pos => {
+            const currentAngle = pos.angle + this.doorRotation;
+            const x = Math.cos(currentAngle) * DOOR_RADIUS;
+            const y = Math.sin(currentAngle) * DOOR_RADIUS;
+
+            this.graphics.fillRect(
+                centerX + x - DOOR_WIDTH / 2,
+                centerY + y - DOOR_HEIGHT / 2,
+                DOOR_WIDTH,
+                DOOR_HEIGHT
+            );
+        });
+
         if (phaseRef.current === 'waiting') {
           this.graphics.lineStyle(6, 0xffffff, 1);
           this.graphics.strokeCircle(centerX, centerY, CIRCLE_RADIUS);
