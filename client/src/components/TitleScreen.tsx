@@ -104,12 +104,13 @@ class SquidGameTitleScene extends Phaser.Scene {
                 duration: segmentDuration, // Duration for drawing this single segment.
                 ease: 'Linear', // Linear easing for a smooth drawing effect.
                 onUpdate: (tween) => {
+                    const target = tween.targets[0] as { x: number, y: number };
                     // Clear the temporary graphics and redraw the current segment up to the current tween position.
                     tempGraphics.clear();
                     tempGraphics.lineStyle(lineWidth, color);
                     tempGraphics.beginPath();
                     tempGraphics.moveTo(p1.x, p1.y);
-                    tempGraphics.lineTo(tween.targets[0].x, tween.targets[0].y);
+                    tempGraphics.lineTo(target.x, target.y);
                     tempGraphics.strokePath();
                 },
                 onComplete: () => {
@@ -351,24 +352,23 @@ const TitleScreen: React.FC = () => {
     useEffect(() => {
         if (gameRef.current && !gameInstance.current) {
             const config: Phaser.Types.Core.GameConfig = {
-                type: Phaser.AUTO, // Automatically choose WebGL or Canvas rendering.
-                width: 800, // Initial width of the game canvas.
-                height: 600, // Initial height of the game canvas.
-                parent: gameRef.current, // The DOM element where the canvas will be inserted.
-                backgroundColor: '#000000', // Background color of the game canvas.
+                type: Phaser.AUTO,
+                width: '100%',
+                height: '100%',
+                parent: gameRef.current,
+                backgroundColor: '#000000',
                 scale: {
-                    mode: Phaser.Scale.FIT, // Scale the game to fit the parent container.
-                    autoCenter: Phaser.Scale.CENTER_BOTH // Center the game horizontally and vertically.
+                    mode: Phaser.Scale.FIT,
+                    autoCenter: Phaser.Scale.CENTER_BOTH
                 },
                 scene: SquidGameTitleScene
             };
 
             gameInstance.current = new Phaser.Game(config);
 
-            // 애니메이션이 끝나는 예상 시간에 맞춰 START GAME 버튼 표시 
             setTimeout(() => {
                 setShowStartButton(true);
-            }, 3000);  //3초 
+            }, 3000);
         }
 
         return () => {

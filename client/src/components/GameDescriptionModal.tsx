@@ -15,7 +15,7 @@ const GameDescriptionModal: React.FC<GameDescriptionModalProps> = ({ isOpen, tit
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: '0 0 32px #ff2a7f99, 0 0 8px #fff1, 0 0 0.5rem #ff2a7f44',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -24,24 +24,24 @@ const GameDescriptionModal: React.FC<GameDescriptionModalProps> = ({ isOpen, tit
   };
 
   const modalStyle: React.CSSProperties = {
-    background: '#2c2c2c',
+    background: '#ffffff',
     padding: '30px 40px',
     borderRadius: '15px',
     width: '90%',
     maxWidth: '500px',
     textAlign: 'center',
-    boxShadow: '0 5px 20px rgba(0,0,0,0.4)',
-    border: '2px solid #444',
+    boxShadow: '0 0 32px #ff2a7f99, 0 0 8px #fff1, 0 0 0.5rem #ff2a7f44',
+    border: '2px solid #ff2a7f',
   };
 
   const titleStyle: React.CSSProperties = {
-    color: '#fff',
+    color: '#000000',
     fontSize: '28px',
     marginBottom: '20px',
   };
   
   const descriptionStyle: React.CSSProperties = {
-    color: '#ddd',
+    color: '#000000',
     fontSize: '18px',
     lineHeight: 1.6,
     marginBottom: '20px',

@@ -473,12 +473,13 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
 
     // 모달 표시 및 준비 완료 신호 전송
     useEffect(() => {
+        // 이 부분의 숫자를 조절하여 모달이 떠 있는 시간을 변경할 수 있습니다. (1000 = 1초)
         const timer = setTimeout(() => {
             setIsDescribing(false);
             if (roomId) {
                 getSocket().emit('clientReady', { roomId });
             }
-        }, 5000);
+        }, 10000);
         return () => clearTimeout(timer);
     }, [roomId]);
 
@@ -677,7 +678,8 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
               description={[
                 "술래가 뒤를 돌아볼 때 움직이면 탈락합니다.",
                 "술래의 시야에 닿으면 미니게임을 진행해야 합니다.",
-                "제한 시간 내에 20개의 토큰 중 1개 이상을 획득하여 술래에게 돌아오세요.",
+                "제한 시간 내에 20개의 토큰 중 1개 이상을 획득하여",
+                "탈출하세요.",
               ]}
             />
             {!isDescribing && !isGameStarted && (
