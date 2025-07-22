@@ -442,6 +442,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     const [tokenCount, setTokenCount] = useState(0);
     const [showAlphabetModal, setShowAlphabetModal] = useState(false);
     const [invincibleUntil, setInvincibleUntil] = useState(0);
+    const [isChatting, setIsChatting] = useState(false);
 
     // 타이머 감소 로직
     useEffect(() => {
@@ -514,6 +515,12 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             alreadyDead.current = false;
         }
     }, [phase, onGoBack]);
+
+    useEffect(() => {
+        if (gameInstance.current && gameInstance.current.input && gameInstance.current.input.keyboard) {
+            gameInstance.current.input.keyboard.enabled = !isChatting;
+        }
+    }, [isChatting]);
 
     // phase가 바뀔 때마다 타이머/토큰 초기화 (dead->waiting 등)
     useEffect(() => {
@@ -619,7 +626,12 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             {timerUI}
             {/* 채팅창 */}
             {roomId && (
-                <ChatBox roomId={roomId} playerNickname={playerNickname || '익명'} />
+                <ChatBox 
+                    roomId={roomId} 
+                    playerNickname={playerNickname || '익명'} 
+                    onFocus={() => setIsChatting(true)}
+                    onBlur={() => setIsChatting(false)}
+                />
             )}
             {/* Container where the Phaser game will be rendered */}
             {phase !== 'dead' && (

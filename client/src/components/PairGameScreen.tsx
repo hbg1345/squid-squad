@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperat
 import Phaser from 'phaser';
 import { useLocation } from 'react-router-dom';
 import { getSocket } from '../socket';
+import ChatBox from './ChatBox';
 
 const PLAYER_RADIUS = 16;
 const PLAYER_MOVE_SPEED = 180;
@@ -20,13 +21,16 @@ type PlayerState = {
   roomIndex: number | null;
 };
 
-const RoomScreen = forwardRef(({ onExit, myId, roomId, allPlayers, roomIndex }: { 
-  onExit: () => void, 
-  myId: string | null, 
-  roomId: string,
-  allPlayers: { [id: string]: PlayerState },
-  roomIndex: number
-}, ref) => {
+type RoomScreenProps = {
+  onExit: () => void;
+  myId: string | null;
+  roomId: string;
+  allPlayers: { [id: string]: PlayerState };
+  roomIndex: number;
+  isChattingRef: React.RefObject<boolean>;
+};
+
+const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, allPlayers, roomIndex, isChattingRef }, ref) => {
   const phaserRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const allPlayersRef = useRef(allPlayers);
@@ -61,7 +65,7 @@ const RoomScreen = forwardRef(({ onExit, myId, roomId, allPlayers, roomIndex }: 
         // Input handling
         if (myRoomPlayer && myRoomPlayer.roomIndex === roomIndex) {
           // Exit interaction
-          if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+          if (Phaser.Input.Keyboard.JustDown(this.interactKey) && !isChattingRef.current) {
             const dist = Phaser.Math.Distance.Between(myRoomPlayer.x, myRoomPlayer.y, 0, 0); // Door is at center
             if (dist < DOOR_INTERACT_DIST) {
               onExit();
@@ -70,17 +74,19 @@ const RoomScreen = forwardRef(({ onExit, myId, roomId, allPlayers, roomIndex }: 
           }
 
           // Movement
-          let dx = 0, dy = 0;
-          if (this.cursors.left.isDown) dx -= 1;
-          if (this.cursors.right.isDown) dx += 1;
-          if (this.cursors.up.isDown) dy -= 1;
-          if (this.cursors.down.isDown) dy += 1;
+          if (!isChattingRef.current) {
+            let dx = 0, dy = 0;
+            if (this.cursors.left.isDown) dx -= 1;
+            if (this.cursors.right.isDown) dx += 1;
+            if (this.cursors.up.isDown) dy -= 1;
+            if (this.cursors.down.isDown) dy += 1;
 
-          if (dx !== 0 || dy !== 0) {
-            const len = Math.sqrt(dx * dx + dy * dy);
-            const newX = myRoomPlayer.x + (dx/len) * PLAYER_MOVE_SPEED * dt;
-            const newY = myRoomPlayer.y + (dy/len) * PLAYER_MOVE_SPEED * dt;
-            socket.emit('game2Input', { roomId, input: { x: newX, y: newY } });
+            if (dx !== 0 || dy !== 0) {
+              const len = Math.sqrt(dx * dx + dy * dy);
+              const newX = myRoomPlayer.x + (dx/len) * PLAYER_MOVE_SPEED * dt;
+              const newY = myRoomPlayer.y + (dy/len) * PLAYER_MOVE_SPEED * dt;
+              socket.emit('game2Input', { roomId, input: { x: newX, y: newY } });
+            }
           }
         }
         
@@ -121,7 +127,7 @@ const RoomScreen = forwardRef(({ onExit, myId, roomId, allPlayers, roomIndex }: 
     };
     gameRef.current = new Phaser.Game(config);
     return () => gameRef.current?.destroy(true);
-  }, [roomIndex, onExit, myId, roomId]);
+  }, [roomIndex, onExit, myId, roomId, allPlayers, isChattingRef]);
 
   return <div ref={phaserRef} />;
 });
@@ -129,7 +135,7 @@ const RoomScreen = forwardRef(({ onExit, myId, roomId, allPlayers, roomIndex }: 
 
 const GameScreen = () => {
   const location = useLocation();
-  const { roomId } = location.state || {};
+  const { roomId, playerNickname } = location.state || {};
   const [allPlayers, setAllPlayers] = useState<{ [id: string]: PlayerState }>({});
   const allPlayersRef = useRef(allPlayers);
   useEffect(() => {
@@ -146,6 +152,11 @@ const GameScreen = () => {
   
   const [mainTimer, setMainTimer] = useState(20);
   const [gameResult, setGameResult] = useState<'survived' | 'died' | null>(null);
+  const [isChatting, setIsChatting] = useState(false);
+  const isChattingRef = useRef(isChatting);
+  useEffect(() => {
+    isChattingRef.current = isChatting;
+  }, [isChatting]);
 
   const [doorQuotas, setDoorQuotas] = useState<number[]>([]);
   const doorQuotasRef = useRef(doorQuotas);
@@ -248,6 +259,11 @@ const GameScreen = () => {
       doorPositions: { x: number; y: number; angle: number }[] = [];
       interactKey!: Phaser.Input.Keyboard.Key;
       quotaTexts: Phaser.GameObjects.Text[] = [];
+      isChattingRef!: React.RefObject<boolean>;
+
+      init(data: { isChattingRef: React.RefObject<boolean> }) {
+        this.isChattingRef = data.isChattingRef;
+      }
 
       create() {
         this.cursors = this.input.keyboard!.createCursorKeys();
@@ -271,30 +287,32 @@ const GameScreen = () => {
 
         const myPlayer = allPlayersRef.current[myIdRef.current!];
         if (myPlayer && myPlayer.roomIndex === null) {
-          let dx = 0, dy = 0;
-          if (this.cursors.left.isDown) dx -= 1;
-          if (this.cursors.right.isDown) dx += 1;
-          if (this.cursors.up.isDown) dy -= 1;
-          if (this.cursors.down.isDown) dy += 1;
+          if (!this.isChattingRef.current) {
+              let dx = 0, dy = 0;
+              if (this.cursors.left.isDown) dx -= 1;
+              if (this.cursors.right.isDown) dx += 1;
+              if (this.cursors.up.isDown) dy -= 1;
+              if (this.cursors.down.isDown) dy += 1;
 
-          if (dx !== 0 || dy !== 0) {
-            const len = Math.sqrt(dx * dx + dy * dy);
-            let newX = myPlayer.x + (dx / len) * PLAYER_MOVE_SPEED * dt;
-            let newY = myPlayer.y + (dy / len) * PLAYER_MOVE_SPEED * dt;
+              if (dx !== 0 || dy !== 0) {
+                const len = Math.sqrt(dx * dx + dy * dy);
+                let newX = myPlayer.x + (dx / len) * PLAYER_MOVE_SPEED * dt;
+                let newY = myPlayer.y + (dy / len) * PLAYER_MOVE_SPEED * dt;
 
-            if (phaseRef.current === 'waiting') {
-              const dist = Math.sqrt(newX * newX + newY * newY);
-              const radiusLimit = CIRCLE_RADIUS - PLAYER_RADIUS;
-              if (dist > radiusLimit) {
-                const angle = Math.atan2(newY, newX);
-                newX = Math.cos(angle) * radiusLimit;
-                newY = Math.sin(angle) * radiusLimit;
+                if (phaseRef.current === 'waiting') {
+                  const dist = Math.sqrt(newX * newX + newY * newY);
+                  const radiusLimit = CIRCLE_RADIUS - PLAYER_RADIUS;
+                  if (dist > radiusLimit) {
+                    const angle = Math.atan2(newY, newX);
+                    newX = Math.cos(angle) * radiusLimit;
+                    newY = Math.sin(angle) * radiusLimit;
+                  }
+                }
+                getSocket().emit('game2Input', { roomId, input: { x: newX, y: newY } });
               }
-            }
-            getSocket().emit('game2Input', { roomId, input: { x: newX, y: newY } });
           }
           
-          if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+          if (Phaser.Input.Keyboard.JustDown(this.interactKey) && !this.isChattingRef.current) {
             this.doorPositions.forEach((pos, index) => {
               const requiredQuota = doorQuotasRef.current[index] ?? 0;
               if (requiredQuota > 0) {
@@ -358,7 +376,20 @@ const GameScreen = () => {
       }
     }
 
-    const config = { type: Phaser.AUTO, width: window.innerWidth, height: window.innerHeight, parent: phaserRef.current!, backgroundColor: '#000', scene: PairScene };
+    const config = { 
+        type: Phaser.AUTO, 
+        width: window.innerWidth, 
+        height: window.innerHeight, 
+        parent: phaserRef.current!, 
+        backgroundColor: '#000', 
+        scene: PairScene,
+        callbacks: {
+            postBoot: function (game: Phaser.Game) {
+                const scene = game.scene.scenes[0] as PairScene;
+                scene.init({ isChattingRef });
+            }
+        }
+    };
     gameRef.current = new Phaser.Game(config);
 
     return () => {
@@ -367,7 +398,13 @@ const GameScreen = () => {
         gameRef.current = null;
       }
     };
-  }, [roomIndex]);
+  }, [roomIndex, isChattingRef]);
+
+  useEffect(() => {
+    if (gameRef.current && gameRef.current.input && gameRef.current.input.keyboard) {
+        gameRef.current.input.keyboard.enabled = !isChatting;
+    }
+  }, [isChatting]);
 
   if (gameResult) {
     return (
@@ -382,7 +419,8 @@ const GameScreen = () => {
 
   return (
     <div style={{ width: '100vw', height: '100vh', cursor: 'default' }}>
-       {(phase === 'waiting' || phase === 'playing') && (
+      {/* Timer */}
+      {(phase === 'waiting' || phase === 'playing') && (
         <div style={{
             position: 'fixed', top: 32, left: '50%', transform: 'translateX(-50%)',
             fontSize: phase === 'waiting' && timer > 0 ? 100 : 48, 
@@ -394,6 +432,18 @@ const GameScreen = () => {
             {phase === 'waiting' && timer > 0 ? timer : mainTimer.toFixed(2)}
         </div>
       )}
+      
+      {/* ChatBox */}
+      {roomId && (
+        <ChatBox 
+          roomId={roomId} 
+          playerNickname={playerNickname || '익명'}
+          onFocus={() => setIsChatting(true)}
+          onBlur={() => setIsChatting(false)}
+        />
+      )}
+
+      {/* Game Canvas */}
       {roomIndex === null ? 
         <div ref={phaserRef} /> : 
         <RoomScreen 
@@ -402,6 +452,7 @@ const GameScreen = () => {
           myId={myIdRef.current} 
           roomId={roomId}
           allPlayers={allPlayers}
+          isChattingRef={isChattingRef}
         />
       }
     </div>
