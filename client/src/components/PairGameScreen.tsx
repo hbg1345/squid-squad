@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import Phaser from 'phaser';
 import { useLocation } from 'react-router-dom';
 import { getSocket } from '../socket';
@@ -16,27 +16,36 @@ const DOOR_HEIGHT = 48;
 const DOOR_RADIUS = CIRCLE_RADIUS + 80;
 
 // 방 내부 화면 Phaser로 구현 (동일)
-function RoomScreen({ roomIndex, onExit, allPlayers, myId, roomId }: { roomIndex: number, onExit: () => void, allPlayers: { [id: string]: { x: number; y: number; nickname: string } }, myId: string | null, roomId: string }) {
-  console.log('[RoomScreen] render', { roomIndex, allPlayers, myId, roomId });
-  // roomIndex 관련 조건을 모두 제거합니다.
+const RoomScreen = forwardRef(({ roomIndex, onExit, myId, roomId }: { roomIndex: number, onExit: () => void, myId: string | null, roomId: string }, ref) => {
   const phaserRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
+  const sceneRef = useRef<any>(null); // RoomScene 인스턴스 참조
+
+  useImperativeHandle(ref, () => ({
+    updatePlayers: (players: { [id: string]: { x: number; y: number; nickname: string } }) => {
+      if (sceneRef.current && typeof sceneRef.current.updatePlayers === 'function') {
+        sceneRef.current.updatePlayers(players);
+      }
+    }
+  }), []);
+
   useEffect(() => {
-    console.log('[RoomScreen useEffect] ENTER', { roomIndex, allPlayers, myId, roomId, phaserRef: phaserRef.current, gameRef: gameRef.current });
     const socket = getSocket();
     class RoomScene extends Phaser.Scene {
       playerSprites: { [id: string]: Phaser.GameObjects.Arc } = {};
       nameTexts: { [id: string]: Phaser.GameObjects.Text } = {};
       cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
       myId: string | null = myId;
+      allPlayers: { [id: string]: { x: number; y: number; nickname: string } } = {};
       create() {
         this.cursors = this.input.keyboard.createCursorKeys();
-        console.log('[Phaser] create() called', { myId: this.myId });
+        sceneRef.current = this;
+      }
+      updatePlayers(newPlayers: { [id: string]: { x: number; y: number; nickname: string } }) {
+        this.allPlayers = newPlayers;
       }
       update() {
-        console.log('[Phaser] update() called', { allPlayers, myId: this.myId });
-        // 내 입력 처리 및 서버로 전송
-        if (this.myId && allPlayers[this.myId]) {
+        if (this.myId && this.allPlayers[this.myId]) {
           let dx = 0, dy = 0;
           if (this.cursors.left?.isDown) dx -= 1;
           if (this.cursors.right?.isDown) dx += 1;
@@ -45,13 +54,12 @@ function RoomScreen({ roomIndex, onExit, allPlayers, myId, roomId }: { roomIndex
           if (dx !== 0 || dy !== 0) {
             const len = Math.sqrt(dx*dx + dy*dy);
             dx /= len; dy /= len;
-            allPlayers[this.myId].x += dx * 4;
-            allPlayers[this.myId].y += dy * 4;
-            socket.emit('game2Input', { roomId, input: { x: allPlayers[this.myId].x, y: allPlayers[this.myId].y } });
+            this.allPlayers[this.myId].x += dx * 4;
+            this.allPlayers[this.myId].y += dy * 4;
+            socket.emit('game2Input', { roomId, input: { x: this.allPlayers[this.myId].x, y: this.allPlayers[this.myId].y } });
           }
         }
-        // 모든 플레이어 렌더링
-        Object.entries(allPlayers).forEach(([id, info]) => {
+        Object.entries(this.allPlayers).forEach(([id, info]) => {
           if (!this.playerSprites[id]) {
             this.playerSprites[id] = this.add.circle(info.x, info.y, PLAYER_RADIUS, id === this.myId ? 0xff2a7f : 0x00bfff);
             this.nameTexts[id] = this.add.text(info.x, info.y - PLAYER_RADIUS - 18, info.nickname, { fontSize: '16px', color: '#fff', fontFamily: 'Arial', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 0.5);
@@ -59,9 +67,8 @@ function RoomScreen({ roomIndex, onExit, allPlayers, myId, roomId }: { roomIndex
           this.playerSprites[id].setPosition(info.x, info.y);
           this.nameTexts[id].setPosition(info.x, info.y - PLAYER_RADIUS - 18);
         });
-        // 사라진 플레이어 제거
         Object.keys(this.playerSprites).forEach(id => {
-          if (!allPlayers[id]) {
+          if (!this.allPlayers[id]) {
             this.playerSprites[id].destroy();
             this.nameTexts[id].destroy();
             delete this.playerSprites[id];
@@ -71,7 +78,6 @@ function RoomScreen({ roomIndex, onExit, allPlayers, myId, roomId }: { roomIndex
       }
     }
     if (phaserRef.current !== null) {
-      console.log('[RoomScreen useEffect] Phaser.Game 생성', { phaserRef: phaserRef.current, gameRef: gameRef.current });
       const config: Phaser.Types.Core.GameConfig = {
         type: Phaser.AUTO,
         width: window.innerWidth,
@@ -89,14 +95,15 @@ function RoomScreen({ roomIndex, onExit, allPlayers, myId, roomId }: { roomIndex
     }
     return () => {
       if (gameRef.current !== null) {
-        console.log('[RoomScreen useEffect] Phaser.Game destroy', { gameRef: gameRef.current });
         gameRef.current.destroy(true);
         gameRef.current = null;
       }
+      sceneRef.current = null;
     };
-  }, [onExit]); // roomIndex를 의존성 배열에서 제거
+  }, [onExit]);
+
   return <div ref={phaserRef} tabIndex={0} style={{ width: '100vw', height: '100vh', outline: 'none' }} />;
-}
+});
 
 const GameScreen = () => {
   const location = useLocation();
@@ -108,6 +115,7 @@ const GameScreen = () => {
   const [timer, setTimer] = useState(WAIT_TIME)
   const [roomIndex, setRoomIndex] = useState<number | null>(null)
   const [restartKey, setRestartKey] = useState(0) // 재시작용
+  const roomScreenRef = useRef<any>(null);
 
   // 타이머 관리
   useEffect(() => {
@@ -173,6 +181,10 @@ const GameScreen = () => {
     // game2State 수신
     const onGame2State = (data: { players: { [id: string]: { x: number; y: number; nickname: string } } }) => {
       setAllPlayers((prev) => {
+        // RoomScreen의 updatePlayers 메서드 호출
+        if (roomScreenRef.current && typeof roomScreenRef.current.updatePlayers === 'function') {
+          roomScreenRef.current.updatePlayers(data.players);
+        }
         return data.players;
       });
     };
@@ -398,9 +410,9 @@ const GameScreen = () => {
       </div>
       {myIdRef.current && (
         <RoomScreen
-          roomIndex={roomIndex}
+          ref={roomScreenRef}
+          roomIndex={roomIndex as number}
           onExit={handleExitRoom}
-          allPlayers={allPlayers}
           myId={myIdRef.current}
           roomId={roomId}
         />
