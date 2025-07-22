@@ -224,9 +224,14 @@ io.on('connection', (socket) => {
       room.doorQuotas = quotas;
       // --- End of quota generation ---
 
-      // Add properties for door rotation sync
-      room.pairGameStartTime = Date.now() + 3000; // Sync with client's 3s waiting timer
+      // --- Rotation Sync Properties ---
+      room.pairGameStartTime = Date.now() + 3000;
       room.doorRotation = 0;
+      room.rotationSpeed = 0.5; // Initial speed
+      room.rotationDirection = 1; // Initial direction
+      const firstChangeInterval = 5000 + Math.random() * 5000; // 5-10s
+      room.nextRotationChangeTime = room.pairGameStartTime + firstChangeInterval;
+      delete room.lastUpdateTime; // Ensure it's reset for the new game
 
       // 게임 2를 위해 플레이어 위치 및 상태 초기화
       Object.values(room.players).forEach(player => {
@@ -292,11 +297,26 @@ setInterval(() => {
       }
       broadcastGameState(roomId);
     } else if (room.gameType === 'pair') {
-      const ROTATION_SPEED = 0.5; // radians per second, same as client
-      if (room.pairGameStartTime && Date.now() >= room.pairGameStartTime) {
-          const elapsedTime = (Date.now() - room.pairGameStartTime) / 1000; // seconds
-          room.doorRotation = elapsedTime * ROTATION_SPEED;
+      const now = Date.now();
+
+      // Only start logic after waiting period
+      if (room.pairGameStartTime && now >= room.pairGameStartTime) {
+          // Check if it's time to change rotation variables
+          if (now >= room.nextRotationChangeTime) {
+              const baseSpeed = 0.5;
+              room.rotationSpeed = baseSpeed * (0.5 + Math.random() * 1.5); // 0.25 to 1.0
+              room.rotationDirection = Math.random() < 0.5 ? 1 : -1;
+              
+              const randomInterval = Math.random() * 5000 + 5000; // 5-10 seconds
+              room.nextRotationChangeTime = now + randomInterval;
+          }
+
+          // Update rotation based on current speed and direction
+          const delta = now - (room.lastUpdateTime || now);
+          room.doorRotation += room.rotationSpeed * room.rotationDirection * (delta / 1000);
+          room.lastUpdateTime = now;
       }
+
       // 게임2용 실시간 동기화
       io.to(roomId).emit('game2State', { 
         players: room.players, 
