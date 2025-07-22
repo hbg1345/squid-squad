@@ -221,7 +221,7 @@ io.on('connection', (socket) => {
       room.gameType = 'pair';
       console.log(`[gameTypeChange] roomId=${roomId} changed to 'pair'`);
       Object.keys(room.players).forEach(id => {
-        io.to(id).emit('phaseChange', { phase: 'pair', players: playerList });
+        io.to(id).emit('phaseChange', { phase: 'pair', players: playerList, roomId: roomId });
       });
     }
   });

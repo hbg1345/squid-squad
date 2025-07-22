@@ -479,8 +479,9 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     // 서버에서 phaseChange 이벤트를 받으면 /game2로 이동
     useEffect(() => {
       const socket = getSocket();
-      const handler = ({ phase, players }) => {
-        if (phase === 'pair') {
+      const handler = ({ phase, players, roomId: eventRoomId }: { phase: string, players: any[], roomId: string }) => {
+        // 현재 방과 일치하는 이벤트에만 반응
+        if (phase === 'pair' && eventRoomId === roomId) {
           navigate('/game2', { state: { roomId, players, playerNickname } });
         }
       };
