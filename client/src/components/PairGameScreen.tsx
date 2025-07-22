@@ -127,7 +127,7 @@ const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, all
     };
     gameRef.current = new Phaser.Game(config);
     return () => gameRef.current?.destroy(true);
-  }, [roomIndex, onExit, myId, roomId, allPlayers, isChattingRef]);
+  }, [roomIndex, onExit, myId, roomId, isChattingRef]);
 
   return <div ref={phaserRef} />;
 });
