@@ -327,6 +327,7 @@ setInterval(() => {
           const successfulRooms = new Set();
           const playersByRoom = {};
 
+          // Group players by room index
           Object.values(room.players).forEach(p => {
               if (p.roomIndex !== null) {
                   if (!playersByRoom[p.roomIndex]) playersByRoom[p.roomIndex] = [];
@@ -334,6 +335,7 @@ setInterval(() => {
               }
           });
 
+          // Determine which rooms were successful
           room.doorQuotas.forEach((quota, index) => {
               const playersInRoom = playersByRoom[index] ? playersByRoom[index].length : 0;
               if (playersInRoom > 0 && playersInRoom === quota) {
@@ -341,12 +343,18 @@ setInterval(() => {
               }
           });
 
+          // Build the list of survivor details ONCE.
+          const survivorDetails = Object.entries(room.players)
+              .filter(([id, player]) => successfulRooms.has(player.roomIndex))
+              .map(([id, player]) => ({ id, nickname: player.nickname }));
+
+          // Emit results to all players
           Object.entries(room.players).forEach(([id, player]) => {
-              if (player.roomIndex !== null && successfulRooms.has(player.roomIndex)) {
-                  io.to(id).emit('game2End', { result: 'survived' });
-              } else {
-                  io.to(id).emit('game2End', { result: 'died' });
-              }
+              const isSurvivor = successfulRooms.has(player.roomIndex);
+              io.to(id).emit('game2End', {
+                  result: isSurvivor ? 'survived' : 'died',
+                  survivors: survivorDetails,
+              });
           });
           return; // Stop further processing for this finished room
       }

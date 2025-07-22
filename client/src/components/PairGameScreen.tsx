@@ -155,6 +155,7 @@ const GameScreen = () => {
   
   const [mainTimer, setMainTimer] = useState(20);
   const [gameResult, setGameResult] = useState<'survived' | 'died' | null>(null);
+  const [survivors, setSurvivors] = useState<{ id: string, nickname: string }[]>([]);
   const [isChatting, setIsChatting] = useState(false);
   const isChattingRef = useRef(isChatting);
   useEffect(() => {
@@ -211,8 +212,9 @@ const GameScreen = () => {
         setRoomIndex(myState.roomIndex);
       }
     };
-    const onGameEnd = ({ result }: { result: 'survived' | 'died' }) => {
+    const onGameEnd = ({ result, survivors: newSurvivors }: { result: 'survived' | 'died', survivors: { id: string, nickname: string }[] }) => {
       setGameResult(result);
+      setSurvivors(newSurvivors || []);
       if (result === 'died') {
         setTimeout(() => {
           getSocket().disconnect();
@@ -433,10 +435,27 @@ const GameScreen = () => {
   if (gameResult) {
     return (
       <div style={{
-        width: '100vw', height: '100vh', background: '#111', color: '#fff',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 60, fontWeight: 'bold'
+        width: '100vw', height: '100vh', background: '#1a1a1a', color: '#fff',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        boxSizing: 'border-box', padding: '50px'
       }}>
-        {gameResult === 'survived' ? '생존!' : '사망'}
+        <h1 style={{ fontSize: '48px', marginBottom: '40px', color: gameResult === 'survived' ? '#4CAF50' : '#F44336' }}>
+          {gameResult === 'survived' ? '생존' : '사망'}
+        </h1>
+        {survivors.length > 0 && (
+          <div style={{ textAlign: 'center' }}>
+            <h2 style={{ fontSize: '28px', marginBottom: '20px', borderBottom: '2px solid #555', paddingBottom: '10px' }}>
+              생존자 목록
+            </h2>
+            <ul style={{ listStyle: 'none', padding: 0 }}>
+              {survivors.map((survivor) => (
+                <li key={survivor.id} style={{ fontSize: '22px', marginBottom: '10px' }}>
+                  {survivor.nickname}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     );
   }
