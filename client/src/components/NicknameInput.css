@@ -1,0 +1,111 @@
+/* 애니메이션 효과를 위한 키프레임 정의 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* "스멀스멀 내려오는" 애니메이션으로 수정 */
+@keyframes flyInContract {
+  from {
+    opacity: 1;
+    /* 위에서 아래로 내려오도록 시작 위치를 음수값으로 변경 */
+    transform: translateY(-80px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nickname-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    position: relative; /* 자식/가상 요소 위치의 기준점 */
+    background-color: #000; /* 애니메이션 시작 전 검은 배경 */
+}
+
+/* 배경 이미지를 위한 가상 요소(pseudo-element) */
+.nickname-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('/stairs.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0; /* 투명한 상태에서 시작 */
+    /* 1. 배경이 1.5초에 걸쳐 서서히 나타남 */
+    animation: fadeIn 1.5s ease-out forwards;
+}
+
+.content-wrapper {
+    position: relative; /* 내부 요소 위치의 기준점 */
+    z-index: 1; /* 배경 이미지보다 위에 있도록 설정 */
+}
+
+.contract-image {
+    width: 600px;
+    height: auto;
+    border-radius: 10px;
+    display: block;
+    opacity: 0; /* 투명한 상태에서 시작 */
+    /* 2. 계약서가 0.5초 뒤에 1초동안 날아옴 */
+    animation: flyInContract 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) 1s forwards;
+}
+
+.nickname-input-field {
+    position: absolute;
+    left: 425px;
+    width: 150px;
+    padding: 13px;
+    border: 1px solid #d8d6d6;
+    background-color: transparent;
+    color: rgb(0, 0, 0);
+    border-radius: 8px;
+    font-weight: bold;
+    text-align: center;
+    transition: background-color 0.2s ease;
+    opacity: 0; /* 투명한 상태에서 시작 */
+    /* 3. 입력창이 1.5초 뒤에 서서히 나타남 */
+    animation: fadeIn 0.7s ease-out 1.5s forwards;
+}
+
+.start-matching-button {
+    position: absolute;
+    top: 800px;
+    left: 208px;
+    width: 200px;
+    padding: 15px;
+    border: none;
+    border-radius: 8px;
+    background-color: #ff2a7f;
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    opacity: 0; /* 투명한 상태에서 시작 */
+    /* 3. 버튼이 1.5초 뒤에 서서히 나타남 */
+    animation: fadeIn 0.7s ease-out 1.5s forwards;
+}
+
+
+/* 포커스 되거나, 텍스트가 있을 때 배경을 흰색으로 변경 */
+.nickname-input-field:focus,
+.nickname-input-field.has-text {
+    background-color: #ffffff;
+    outline: none; /* 클릭 시 생기는 기본 테두리(파란색 등) 제거 */
+}
+
+.start-matching-button:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+
+.start-matching-button:hover:not(:disabled) {
+    background-color: #e0236a;
+} 

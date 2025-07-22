@@ -8,26 +8,26 @@
   z-index: 10;
 }
 .modal-content.neon-modal {
-  background: #18111a;
+  background: #ffffff;
   color: #fff;
   padding: 2.5rem 3.5rem;
   border-radius: 1.5rem;
   box-shadow: 0 0 32px #ff2a7f99, 0 0 8px #fff1, 0 0 0.5rem #ff2a7f44;
-  border: 2.5px solid #ff2a7f;
+  /*border: 2.5px solid #ff2a7f;*/
   display: flex;
   flex-direction: column;
   align-items: center;
   position: relative;
 }
 .loader.neon-loader {
-  border: 6px solid #2a002a;
+  border: 6px solid #fefefe;
   border-top: 6px solid #ff2a7f;
   border-radius: 50%;
   width: 54px;
   height: 54px;
   animation: spin 1s linear infinite;
   margin-bottom: 1.5rem;
-  box-shadow: 0 0 16px #ff2a7f, 0 0 32px #ff2a7f44;
+  /*box-shadow: 0 0 16px #ff2a7f, 0 0 32px #ff2a7f44;*/
 }
 @keyframes spin {
   0% { transform: rotate(0deg); }
@@ -36,32 +36,33 @@
 .modal-text {
   font-size: 1.4rem;
   margin-bottom: 1.2rem;
-  text-shadow: 0 0 8px #ff2a7f, 0 0 2px #fff;
+  /*text-shadow: 0 0 8px #ff2a7f, 0 0 2px #fff;*/
 }
 .modal-pink {
-  color: #ff2a7f;
-  text-shadow: 0 0 8px #ff2a7f, 0 0 2px #fff;
+  color: #000000;
+  /*text-shadow: 0 0 8px #ff2a7f, 0 0 2px #fff;*/
 }
 .elapsed-time {
   font-size: 1.1rem;
-  color: #fff;
+  color: #a0a0a0;
   margin-bottom: 1.7rem;
-  text-shadow: 0 0 4px #ff2a7f44;
+  /*text-shadow: 0 0 4px #ff2a7f44;*/
 }
 .cancel-btn.neon-btn {
-  background: #18111a;
-  color: #ff2a7f;
+  background: #ff2a7f;
+  color: #ffffff;
   border: 2px solid #ff2a7f;
   border-radius: 0.8rem;
   padding: 0.8rem 2.5rem;
   font-size: 1.15rem;
   font-weight: bold;
   cursor: pointer;
-  box-shadow: 0 0 12px #ff2a7f, 0 0 2px #fff1;
+  /*box-shadow: 0 0 12px #ff2a7f, 0 0 2px #fff1;*/
   transition: background 0.2s, color 0.2s, box-shadow 0.2s;
 }
 .cancel-btn.neon-btn:hover {
-  background: #ff2a7f;
-  color: #18111a;
-  box-shadow: 0 0 24px #ff2a7f, 0 0 8px #fff1;
+  border: 2px solid #e0236a;
+  background: #e0236a;
+  color: rgb(255, 255, 255);
+  /*box-shadow: 0 0 24px #ff2a7f, 0 0 8px #fff1;*/
 } 
