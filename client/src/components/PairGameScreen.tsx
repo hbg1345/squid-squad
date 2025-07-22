@@ -55,11 +55,12 @@ const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, all
         this.load.image('player4', '/player4.png');
         this.load.image('player5', '/player5.png');
         this.load.image('background2', '/background2.png');
+        this.load.image('roomBg', '/room.png');
       }
 
       create() {
-        // Add background2 image, stretched to fill
-        this.add.image(this.cameras.main.width / 2, this.cameras.main.height / 2, 'background2')
+        // Add room background image, stretched to fill
+        this.add.image(this.cameras.main.width / 2, this.cameras.main.height / 2, 'roomBg')
           .setOrigin(0.5)
           .setDisplaySize(this.cameras.main.width, this.cameras.main.height)
           .setDepth(-100);
