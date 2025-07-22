@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getSocket } from '../socket';
 import { MATCH_SIZE } from '../constants/game';
 import MatchingModal from '../MatchingModal';
+import CharacterSelectionModal from './CharacterSelectionModal';
 import './NicknameInput.css';
 
 const NicknameInput: React.FC = () => {
@@ -12,42 +13,48 @@ const NicknameInput: React.FC = () => {
     const [matchingTotal] = useState(MATCH_SIZE);
     const [elapsed, setElapsed] = useState(0);
     const navigate = useNavigate();
+    const [showCharacterModal, setShowCharacterModal] = useState(false);
+    const [isContractSubmitted, setIsContractSubmitted] = useState(false); // 애니메이션 상태 추가
 
     useEffect(() => {
-        if (showMatchingModal) {
-            getSocket().emit('joinMatch');
-        } else {
-            getSocket().emit('leaveMatch');
-        }
-    }, [showMatchingModal]);
-
-    useEffect(() => {
+        const socket = getSocket();
         const handleMatchingCount = (count: number) => setMatchingCurrent(count);
-        const handleMatchFound = ({ roomId }: { roomId: string }) => {
+        const handleMatchFound = ({ roomId, players }: { roomId: string, players: any[] }) => {
             setShowMatchingModal(false);
-            navigate('/game1', { state: { roomId, playerNickname: nickname } });
+            const myInfo = players.find(p => p.id === socket.id);
+            navigate('/game1', { state: { roomId, playerNickname: myInfo?.nickname, character: myInfo?.character, players } });
         };
 
-        getSocket().on('matchingCount', handleMatchingCount);
-        getSocket().on('matchFound', handleMatchFound);
+        socket.on('matchingCount', handleMatchingCount);
+        socket.on('matchFound', handleMatchFound);
 
         return () => {
-            getSocket().off('matchingCount', handleMatchingCount);
-            getSocket().off('matchFound', handleMatchFound);
+            socket.off('matchingCount', handleMatchingCount);
+            socket.off('matchFound', handleMatchFound);
         };
-    }, [navigate, nickname]);
+    }, [navigate]);
 
-    const handleStartMatching = () => {
-        setShowMatchingModal(true);
+    const handleCharacterSelectSubmit = () => {
+        if (!nickname.trim()) return;
+        setIsContractSubmitted(true); // 1. 서약서 사라지는 애니메이션 시작
+        setTimeout(() => {
+            setShowCharacterModal(true); // 2. 0.5초 후 캐릭터 선택 모달 표시
+        }, 500); // 애니메이션 시간과 일치
     };
 
     const handleCancelMatching = () => {
         setShowMatchingModal(false);
     };
 
+    const handleGameStart = (selectedCharacter: string) => {
+        setShowCharacterModal(false);
+        setShowMatchingModal(true);
+        getSocket().emit('playerReady', { nickname, character: selectedCharacter });
+    };
+
     return (
         <div className="nickname-container">
-            <div className="content-wrapper">
+            <div className={`content-wrapper ${isContractSubmitted ? 'submitted' : ''}`}>
                 <img src="/contract.png" alt="Game Contract" className="contract-image" />
                 <input
                     type="text"
@@ -58,18 +65,22 @@ const NicknameInput: React.FC = () => {
                     className={`nickname-input-field ${nickname ? 'has-text' : ''}`}
                     style={{
                         fontSize: nickname.length >= 5 ? '1rem' : '2rem',
-                        top: nickname.length >= 5 ? '732px' : '725px' // 글자 수에 따라 top 위치 조정
+                        top: nickname.length >= 5 ? '732px' : '725px'
                     }}
-                    //5자 이상이면 1rem, 아니면 2rem으로 고정  
                 />
                 <button
-                    onClick={handleStartMatching}
+                    onClick={handleCharacterSelectSubmit}
                     disabled={!nickname.trim()}
                     className="start-matching-button"
                 >
-                    게임 시작
+                    서약서 제출
                 </button>
             </div>
+            <CharacterSelectionModal
+                isOpen={showCharacterModal}
+                onClose={() => setShowCharacterModal(false)}
+                onGameStart={handleGameStart}
+            />
             <MatchingModal
                 open={showMatchingModal}
                 onCancel={handleCancelMatching}

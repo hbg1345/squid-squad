@@ -74,12 +74,21 @@ let roomSeq = 1;
 
 io.on('connection', (socket) => {
   socket.on('joinGame', ({ roomId, nickname }) => {
-    console.log(`[joinGame] socket.id=${socket.id}, roomId=${roomId}, nickname=${nickname}`);
-    if (!rooms[roomId]) return;
-    rooms[roomId].players[socket.id] = { x: 100, y: 100, nickname };
+    if (!rooms[roomId]) {
+      console.log(`[ERROR] joinGame: Room ${roomId} not found.`);
+      return;
+    }
+    // 게임 시작 시점에 플레이어 정보가 이미 rooms[roomId].players에 있어야 함
+    // 만약 없다면, 매칭 과정에서 누락된 것이므로 에러 로그를 남기는 것이 좋음
+    if (!rooms[roomId].players[socket.id]) {
+      console.log(`[ERROR] joinGame: Player ${socket.id} not found in room ${roomId}.`);
+      // 비정상적인 접근일 수 있으므로 여기서 처리를 중단.
+      return;
+    }
+
     rooms[roomId].playerInputs = rooms[roomId].playerInputs || {};
     rooms[roomId].playerInputs[socket.id] = { left: false, right: false, up: false, down: false };
-    // 토큰 초기화(없거나 비어 있으면 생성)
+    
     if (!rooms[roomId].tokens || rooms[roomId].tokens.length === 0) {
       rooms[roomId].tokens = [];
       while (rooms[roomId].tokens.length < MAX_TOKENS) {
@@ -87,7 +96,6 @@ io.on('connection', (socket) => {
         rooms[roomId].tokens.push(newToken);
       }
     }
-    console.log(`[joinGame] players in room ${roomId}:`, Object.keys(rooms[roomId].players));
     broadcastGameState(roomId);
   });
 
@@ -126,29 +134,49 @@ io.on('connection', (socket) => {
     broadcastGameState(roomId);
   });
 
-  socket.on('joinMatch', () => {
-    if (!waitingPlayers.includes(socket)) {
-      waitingPlayers.push(socket);
+  socket.on('playerReady', ({ nickname, character }) => {
+    if (!waitingPlayers.find(p => p.id === socket.id)) {
+      waitingPlayers.push({
+        id: socket.id,
+        socket: socket,
+        nickname: nickname,
+        character: character
+      });
+
       io.emit('matchingCount', waitingPlayers.length);
+
       if (waitingPlayers.length >= MATCH_SIZE) {
         const matched = waitingPlayers.splice(0, MATCH_SIZE);
         const roomId = `room${roomSeq++}`;
-        rooms[roomId] = { players: {}, tokens: [], created: Date.now(), younghee: { x: 360, y: 180 }, gameType: 'redlight' };
-        matched.forEach(s => {
-          s.join(roomId);
-          s.emit('matchFound', { roomId });
+        const roomPlayers = {};
+
+        matched.forEach(p => {
+          roomPlayers[p.id] = {
+            id: p.id,
+            x: Math.floor(Math.random() * 500) + 50,
+            y: Math.floor(Math.random() * 500) + 50,
+            nickname: p.nickname,
+            character: p.character,
+          };
+        });
+
+        rooms[roomId] = { players: roomPlayers, tokens: [], created: Date.now(), younghee: { x: 360, y: 180 }, playerInputs: {} };
+
+        const playersForClient = Object.values(roomPlayers);
+
+        matched.forEach(p => {
+          p.socket.join(roomId);
+          p.socket.emit('matchFound', { roomId, players: playersForClient });
         });
       }
     }
   });
+
   socket.on('leaveMatch', () => {
-    waitingPlayers = waitingPlayers.filter(s => s !== socket);
+    waitingPlayers = waitingPlayers.filter(p => p.id !== socket.id);
     io.emit('matchingCount', waitingPlayers.length);
   });
-  socket.on('chat', ({ roomId, nickname, message, time }) => {
-    // 같은 roomId에 join된 모든 유저에게 메시지 전송
-    io.to(roomId).emit('chat', { roomId, nickname, message, time });
-  });
+
   socket.on('disconnect', () => {
     // 모든 방에서 플레이어 제거
     Object.entries(rooms).forEach(([roomId, room]) => {
@@ -196,170 +224,24 @@ io.on('connection', (socket) => {
         console.log(`[ERROR] playerPush: player ${id} not found in room ${roomId}`);
     }
 });
-
-  // survived 이벤트 처리
-  socket.on('survived', ({ roomId, nickname }) => {
-    const room = rooms[roomId];
-    if (!room) return;
-    if (!room.players[socket.id]) return;
-    room.players[socket.id].survived = true;
-    // 모든 남은 플레이어가 survived를 보냈는지 체크
-    const allSurvived = Object.values(room.players).every(p => p.survived);
-    if (allSurvived) {
-      const playerList = Object.entries(room.players).map(([id, info]) => ({ id, nickname: info.nickname }));
-      console.log(`[phaseChange] roomId=${roomId}, players:`, Object.keys(room.players), 'playerList:', playerList);
-      
-      const playerCount = Object.keys(room.players).length;
-      
-      // --- Generate door quotas ---
-      const DOOR_COUNT = 10;
-      const totalQuotaSum = playerCount > 0 ? Math.max(1, playerCount - 2) : 0;
-      const quotas = new Array(DOOR_COUNT).fill(0);
-
-      for (let i = 0; i < totalQuotaSum; i++) {
-          const doorIndex = Math.floor(Math.random() * DOOR_COUNT);
-          quotas[doorIndex]++;
-      }
-      
-      room.doorQuotas = quotas;
-      // --- End of quota generation ---
-
-      // --- Rotation Sync Properties ---
-      room.pairGameStartTime = Date.now() + 3000;
-      room.gameEndTime = room.pairGameStartTime + 20000; // 20 second game timer
-      room.doorRotation = 0;
-      room.rotationSpeed = 0.5; // Initial speed
-      room.rotationDirection = 1; // Initial direction
-      const firstChangeInterval = 5000 + Math.random() * 5000; // 5-10s
-      room.nextRotationChangeTime = room.pairGameStartTime + firstChangeInterval;
-      room.lastUpdateTime = room.pairGameStartTime;
-      room.isGame2Finished = false;
-
-      // 게임 2를 위해 플레이어 위치 및 상태 초기화
-      Object.values(room.players).forEach(player => {
-        player.x = 0;
-        player.y = 0;
-        player.roomIndex = null; // 방 상태 초기화
-        delete player.survived; // 상태 플래그 정리
-      });
-
-      // 게임 타입을 'pair'로 변경
-      room.gameType = 'pair';
-      console.log(`[gameTypeChange] roomId=${roomId} changed to 'pair'`);
-      Object.keys(room.players).forEach(id => {
-        io.to(id).emit('phaseChange', { phase: 'pair', players: playerList, roomId: roomId });
-      });
-    }
-  });
-
-  // 게임2 입력 처리
-  socket.on('game2Input', ({ roomId, input }) => {
-    const room = rooms[roomId];
-    if (!room || !room.players[socket.id]) return;
-    // input: { x, y }
-    room.players[socket.id].x = input.x;
-    room.players[socket.id].y = input.y;
-  });
-
-  // 게임2 방 입장
-  socket.on('enterRoom', ({ roomId, roomIndex }) => {
-    const room = rooms[roomId];
-    if (!room || !room.players[socket.id]) return;
-    room.players[socket.id].roomIndex = roomIndex;
-    room.players[socket.id].x = 0;
-    room.players[socket.id].y = 0;
-  });
-
-  // 게임2 방 퇴장
-  socket.on('exitRoom', ({ roomId }) => {
-    const room = rooms[roomId];
-    if (!room || !room.players[socket.id]) return;
-    room.players[socket.id].roomIndex = null;
-    // x, y는 메인 씬에서 다시 동기화되므로 여기서 바꿀 필요 없음
-  });
+  
 });
 
 // 60fps 기준으로 위치 계산 및 broadcast (방별로)
 setInterval(() => {
   Object.entries(rooms).forEach(([roomId, room]) => {
-    if (room.gameType === 'redlight') {
-      // 기존 게임1 위치 계산 및 broadcast
-      for (const id in room.players) {
-        const input = room.playerInputs ? (room.playerInputs[id] || {}) : {};
-        let dx = 0, dy = 0;
-        const PLAYER_SPEED = 500 / 60;
-        if (input.left) dx -= PLAYER_SPEED;
-        if (input.right) dx += PLAYER_SPEED;
-        if (input.up) dy -= PLAYER_SPEED;
-        if (input.down) dy += PLAYER_SPEED;
-        if (room.players[id] && (dx !== 0 || dy !== 0)) { // 입력이 있을 때만 위치 변경
-          room.players[id].x = Math.max(20, Math.min(1920 - 20, room.players[id].x + dx));
-          room.players[id].y = Math.max(20, Math.min(1080 - 20, room.players[id].y + dy));
-        }
-      }
-      broadcastGameState(roomId);
-    } else if (room.gameType === 'pair') {
-      const now = Date.now();
-
-      // Check for game end condition first
-      if (!room.isGame2Finished && room.gameEndTime && now >= room.gameEndTime) {
-          room.isGame2Finished = true; // Mark as finished
-
-          const successfulRooms = new Set();
-          const playersByRoom = {};
-
-          Object.values(room.players).forEach(p => {
-              if (p.roomIndex !== null) {
-                  if (!playersByRoom[p.roomIndex]) playersByRoom[p.roomIndex] = [];
-                  playersByRoom[p.roomIndex].push(p);
-              }
-          });
-
-          room.doorQuotas.forEach((quota, index) => {
-              const playersInRoom = playersByRoom[index] ? playersByRoom[index].length : 0;
-              if (playersInRoom > 0 && playersInRoom === quota) {
-                  successfulRooms.add(index);
-              }
-          });
-
-          Object.entries(room.players).forEach(([id, player]) => {
-              if (player.roomIndex !== null && successfulRooms.has(player.roomIndex)) {
-                  io.to(id).emit('game2End', { result: 'survived' });
-              } else {
-                  io.to(id).emit('game2End', { result: 'died' });
-              }
-          });
-          return; // Stop further processing for this finished room
-      }
-
-      // Only start logic after waiting period
-      if (room.pairGameStartTime && now >= room.pairGameStartTime) {
-          // Check if it's time to change rotation variables
-          if (now >= room.nextRotationChangeTime) {
-              const baseSpeed = 0.5;
-              room.rotationSpeed = baseSpeed * (0.5 + Math.random() * 1.5); // 0.25 to 1.0
-              room.rotationDirection = Math.random() < 0.5 ? 1 : -1;
-              
-              const randomInterval = Math.random() * 5000 + 5000; // 5-10 seconds
-              room.nextRotationChangeTime = now + randomInterval;
-          }
-
-          // Update rotation based on current speed and direction
-          const delta = now - room.lastUpdateTime;
-          room.doorRotation += room.rotationSpeed * room.rotationDirection * (delta / 1000);
-          room.lastUpdateTime = now;
-      }
-      
-      const remainingTime = room.gameEndTime ? Math.max(0, (room.gameEndTime - now) / 1000) : 0;
-
-      // 게임2용 실시간 동기화
-      io.to(roomId).emit('game2State', { 
-        players: room.players, 
-        doorQuotas: room.doorQuotas,
-        doorRotation: room.doorRotation || 0,
-        remainingTime
-      });
+    for (const id in room.players) {
+      const input = room.playerInputs[id] || {};
+      let dx = 0, dy = 0;
+      const PLAYER_SPEED = 500 / 60; // 500px/sec, 60fps 기준 프레임당 이동량
+      if (input.left) dx -= PLAYER_SPEED;
+      if (input.right) dx += PLAYER_SPEED;
+      if (input.up) dy -= PLAYER_SPEED;
+      if (input.down) dy += PLAYER_SPEED;
+      room.players[id].x = Math.max(20, Math.min(1920 - 20, room.players[id].x + dx));
+      room.players[id].y = Math.max(20, Math.min(1080 - 20, room.players[id].y + dy));
     }
+    broadcastGameState(roomId);
   });
 }, 1000/60);
 

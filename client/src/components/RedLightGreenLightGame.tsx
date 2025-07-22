@@ -77,8 +77,14 @@ class RedLightGreenLightScene extends Phaser.Scene {
     preload() {
         // 이미지 불러오기 
         this.load.image('background', '/background.png');
-        this.load.image('younghee', '/younghee.png'); 
-        this.load.image('player', '/player.png');
+        this.load.image('younghee', '/younghee.png');
+        // 모든 플레이어 캐릭터 이미지 로드
+        this.load.image('player.png', '/player.png');
+        this.load.image('player2.png', '/player2.png');
+        this.load.image('player3.png', '/player3.png');
+        this.load.image('player4.png', '/player4.png');
+        this.load.image('player5.png', '/player5.png');
+
         this.load.image('token1', '/token1.png');
         this.load.image('token2', '/token2.png');
     }
@@ -144,7 +150,9 @@ class RedLightGreenLightScene extends Phaser.Scene {
             // 1. 없는 플레이어 생성
             Object.entries(data.players).forEach(([id, info]: [string, any]) => {
                 if (!this.players.has(id)) {
-                    const sprite = this.physics.add.sprite(info.x, info.y, 'player')
+                    // 서버에서 받은 캐릭터 정보로 스프라이트 생성
+                    const characterKey = info.character || 'player.png';
+                    const sprite = this.physics.add.sprite(info.x, info.y, characterKey)
                         .setScale(0.5)
                         .setOrigin(0.5, 0.5)
                         .setCollideWorldBounds(true);
