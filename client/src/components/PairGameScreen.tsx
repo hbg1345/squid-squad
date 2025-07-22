@@ -334,6 +334,7 @@ const GameScreen = () => {
       quotaTexts: Phaser.GameObjects.Text[] = [];
       isChattingRef!: React.RefObject<boolean>;
       pushKey!: Phaser.Input.Keyboard.Key;
+      portalImgs: (Phaser.GameObjects.Image | null)[] = [];
 
       preload() {
         this.load.image('player', '/player.png');
@@ -341,6 +342,7 @@ const GameScreen = () => {
         this.load.image('player3', '/player3.png');
         this.load.image('player4', '/player4.png');
         this.load.image('player5', '/player5.png');
+        this.load.image('portal', '/portal.png');
       }
 
       init(data: { isChattingRef: React.RefObject<boolean> }) {
@@ -445,22 +447,27 @@ const GameScreen = () => {
         }
         
         this.graphics.clear();
-        this.graphics.fillStyle(0x0000ff, 1);
         this.doorPositions.forEach((pos, index) => {
-            const requiredQuota = doorQuotasRef.current[index] ?? 0;
-
-            if (requiredQuota > 0) {
-              const currentAngle = pos.angle + doorRotationRef.current;
-              const x = Math.cos(currentAngle) * DOOR_RADIUS;
-              const y = Math.sin(currentAngle) * DOOR_RADIUS;
-              this.graphics.fillRect(centerX + x - DOOR_WIDTH / 2, centerY + y - DOOR_HEIGHT / 2, DOOR_WIDTH, DOOR_HEIGHT);
-              
-              const currentPlayersInRoom = Object.values(allPlayersRef.current).filter(p => p.roomIndex === index).length;
-              const text = `${currentPlayersInRoom}/${requiredQuota}`;
-              this.quotaTexts[index].setText(text).setPosition(centerX + x, centerY + y - DOOR_HEIGHT / 2 - 15).setVisible(true);
+          const requiredQuota = doorQuotasRef.current[index] ?? 0;
+          if (requiredQuota > 0) {
+            const currentAngle = pos.angle + doorRotationRef.current;
+            const x = Math.cos(currentAngle) * DOOR_RADIUS;
+            const y = Math.sin(currentAngle) * DOOR_RADIUS;
+            // Draw portal image
+            if (!this.portalImgs[index]) {
+              this.portalImgs[index] = this.add.image(centerX + x, centerY + y, 'portal').setOrigin(0.5).setScale(0.7);
             } else {
-              this.quotaTexts[index].setVisible(false);
+              this.portalImgs[index]!.setPosition(centerX + x, centerY + y);
+              this.portalImgs[index]!.setVisible(true);
             }
+            // Quota text
+            const currentPlayersInRoom = Object.values(allPlayersRef.current).filter(p => p.roomIndex === index).length;
+            const text = `${currentPlayersInRoom}/${requiredQuota}`;
+            this.quotaTexts[index].setText(text).setPosition(centerX + x, centerY + y - 70).setVisible(true);
+          } else {
+            this.quotaTexts[index].setVisible(false);
+            if (this.portalImgs[index]) { this.portalImgs[index]!.setVisible(false); }
+          }
         });
 
         if (phaseRef.current === 'waiting') {
