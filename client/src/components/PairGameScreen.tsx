@@ -6,7 +6,7 @@ import ChatBox from './ChatBox';
 import GameDescriptionModal from './GameDescriptionModal';
 
 const PLAYER_RADIUS = 16;
-const PLAYER_MOVE_SPEED = 180;
+const PLAYER_MOVE_SPEED = 216;
 const CIRCLE_RADIUS = 200;
 const DOOR_COUNT = 10;
 const DOOR_WIDTH = 32;
@@ -46,6 +46,7 @@ const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, all
       cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
       interactKey!: Phaser.Input.Keyboard.Key;
       graphics!: Phaser.GameObjects.Graphics;
+      pushKey!: Phaser.Input.Keyboard.Key;
 
       preload() {
         this.load.image('player', '/player.png');
@@ -60,6 +61,15 @@ const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, all
         this.cursors = this.input.keyboard!.createCursorKeys();
         this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
         this.graphics = this.add.graphics();
+        this.pushKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        const socket = getSocket();
+        socket.on('playerPushed', ({ id, x, y }) => {
+          const sprite = this.playerSprites[id];
+          if (sprite) {
+            sprite.x = x;
+            sprite.y = y;
+          }
+        });
         
         this.add.text(this.cameras.main.width / 2, 50, `Room ${roomIndex + 1}`, { fontSize: '32px' }).setOrigin(0.5);
         this.add.text(this.cameras.main.width / 2, this.cameras.main.height - 50, `Press 'E' near the door to exit`, { fontSize: '24px' }).setOrigin(0.5);
@@ -72,6 +82,33 @@ const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, all
         
         const myRoomPlayer = allPlayersRef.current[myId!];
         
+        // Push logic
+        if (this.pushKey && Phaser.Input.Keyboard.JustDown(this.pushKey) && myRoomPlayer && myRoomPlayer.roomIndex === roomIndex) {
+          let collisionDetected = false;
+          Object.entries(allPlayersRef.current).forEach(([id, info]) => {
+            if (id === myId) return;
+            if (info.roomIndex !== roomIndex) return;
+            const mySprite = this.playerSprites[myId!];
+            const otherSprite = this.playerSprites[id];
+            if (!mySprite || !otherSprite) return;
+            const dist = Phaser.Math.Distance.Between(mySprite.x, mySprite.y, otherSprite.x, otherSprite.y);
+            const myRadius = mySprite.displayWidth * 0.5;
+            const otherRadius = otherSprite.displayWidth * 0.5;
+            const requiredDist = myRadius + otherRadius + 30;
+            if (dist <= requiredDist) {
+              collisionDetected = true;
+              const dirs = [
+                { dx: 0, dy: -1 },
+                { dx: 0, dy: 1 },
+                { dx: -1, dy: 0 },
+                { dx: 1, dy: 0 },
+              ];
+              const dir = Phaser.Math.RND.pick(dirs);
+              getSocket().emit('playerPush', { id, dx: dir.dx, dy: dir.dy });
+            }
+          });
+        }
+
         // Input handling
         if (myRoomPlayer && myRoomPlayer.roomIndex === roomIndex) {
           // Exit interaction
@@ -296,6 +333,7 @@ const GameScreen = () => {
       interactKey!: Phaser.Input.Keyboard.Key;
       quotaTexts: Phaser.GameObjects.Text[] = [];
       isChattingRef!: React.RefObject<boolean>;
+      pushKey!: Phaser.Input.Keyboard.Key;
 
       preload() {
         this.load.image('player', '/player.png');
@@ -313,7 +351,15 @@ const GameScreen = () => {
         this.cursors = this.input.keyboard!.createCursorKeys();
         this.graphics = this.add.graphics();
         this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-
+        this.pushKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        const socket = getSocket();
+        socket.on('playerPushed', ({ id, x, y }) => {
+          const sprite = playerSprites[id];
+          if (sprite) {
+            sprite.x = x;
+            sprite.y = y;
+          }
+        });
         for (let i = 0; i < DOOR_COUNT; i++) {
           const angle = (i / DOOR_COUNT) * Math.PI * 2;
           this.doorPositions.push({ x: 0, y: 0, angle });
@@ -328,8 +374,34 @@ const GameScreen = () => {
         const mainCam = this.cameras.main;
         const centerX = mainCam.width / 2;
         const centerY = mainCam.height / 2;
-
         const myPlayer = allPlayersRef.current[myIdRef.current!];
+        // Push logic
+        if (this.pushKey && Phaser.Input.Keyboard.JustDown(this.pushKey) && myPlayer && myPlayer.roomIndex === null) {
+          let collisionDetected = false;
+          Object.entries(allPlayersRef.current).forEach(([id, info]) => {
+            if (id === myIdRef.current) return;
+            if (info.roomIndex !== null) return;
+            const mySprite = playerSprites[myIdRef.current!];
+            const otherSprite = playerSprites[id];
+            if (!mySprite || !otherSprite) return;
+            const dist = Phaser.Math.Distance.Between(mySprite.x, mySprite.y, otherSprite.x, otherSprite.y);
+            const myRadius = mySprite.displayWidth * 0.5;
+            const otherRadius = otherSprite.displayWidth * 0.5;
+            const requiredDist = myRadius + otherRadius + 30;
+            if (dist <= requiredDist) {
+              collisionDetected = true;
+              const dirs = [
+                { dx: 0, dy: -1 },
+                { dx: 0, dy: 1 },
+                { dx: -1, dy: 0 },
+                { dx: 1, dy: 0 },
+              ];
+              const dir = Phaser.Math.RND.pick(dirs);
+              getSocket().emit('playerPush', { id, dx: dir.dx, dy: dir.dy });
+            }
+          });
+        }
+        
         if (myPlayer && myPlayer.roomIndex === null) {
           if (!this.isChattingRef.current) {
               let dx = 0, dy = 0;
