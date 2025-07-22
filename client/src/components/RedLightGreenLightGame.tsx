@@ -310,7 +310,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
 
         // --- 밀치기 기능 디버깅 ---
         if (this.pushKey && Phaser.Input.Keyboard.JustDown(this.pushKey)) {
-            console.log('--- 스페이스바 눌림 감지! ---');
             const mySprite = this.players.get(this.myId)!;
             let collisionDetected = false;
 
@@ -322,11 +321,8 @@ class RedLightGreenLightScene extends Phaser.Scene {
                 const otherRadius = otherSprite.displayWidth * 0.7;
                 const requiredDist = myRadius + otherRadius + 30; // 충돌 인식 거리 조절 (30px)
 
-                console.log(`[충돌 확인] 대상: ${id}, 거리: ${dist.toFixed(2)}, 필요 거리: ${requiredDist.toFixed(2)}`);
-
                 if (dist <= requiredDist) {
                     collisionDetected = true;
-                    console.log(`[충돌 성공!] 대상: ${id}! 서버에 밀치기 요청합니다.`);
                     const dirs = [
                         { dx: 0, dy: -1 }, // up
                         { dx: 0, dy: 1 },  // down
@@ -339,7 +335,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
             });
 
             if (!collisionDetected) {
-                console.log('[충돌 실패] 스페이스바는 눌렸지만, 충돌한 플레이어가 없습니다.');
             }
         }
         // --- 디버깅 끝 ---
@@ -443,7 +438,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
 
     // 제한 시간 및 phase 상태 추가
     const [phase, setPhase] = useState<'waiting' | 'dead' | 'survived' | 'playing'>('waiting');
-    const [timer, setTimer] = useState(60);
+    const [timer, setTimer] = useState(10);
     const [tokenCount, setTokenCount] = useState(0);
     const [showAlphabetModal, setShowAlphabetModal] = useState(false);
     const [invincibleUntil, setInvincibleUntil] = useState(0);
@@ -473,6 +468,28 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
         }
     }, [phase, timer, tokenCount]);
 
+    // survived가 되면 서버에 알림
+    useEffect(() => {
+      if (phase === 'survived') {
+        const socket = getSocket();
+        socket.emit('survived', { roomId, nickname: playerNickname });
+      }
+    }, [phase, roomId, playerNickname]);
+
+    // 서버에서 phaseChange 이벤트를 받으면 /game2로 이동
+    useEffect(() => {
+      const socket = getSocket();
+      const handler = ({ phase, players }) => {
+        if (phase === 'pair') {
+          navigate('/game2', { state: { roomId, players, playerNickname } });
+        }
+      };
+      socket.on('phaseChange', handler);
+      return () => {
+        socket.off('phaseChange', handler);
+      };
+    }, [navigate, roomId, playerNickname]);
+
     // survived phase가 되면 PairGameScreen(/game2)으로 이동
     useEffect(() => {
         if (phase === 'survived') {
@@ -500,7 +517,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     // phase가 바뀔 때마다 타이머/토큰 초기화 (dead->waiting 등)
     useEffect(() => {
         if (phase === 'waiting') {
-            setTimer(60);
+            setTimer(10);
             setTokenCount(0);
         }
     }, [phase]);
@@ -560,8 +577,12 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname, roomId });
         }
         return () => {
+            const socket = getSocket();
+            socket.off('gameState');
+            socket.off('youngheeUpdate');
+            socket.off('tokensUpdate');
             if (gameInstance.current) {
-                gameInstance.current.destroy(true); 
+                gameInstance.current.destroy(true);
                 gameInstance.current = null;
             }
         };

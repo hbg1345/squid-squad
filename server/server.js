@@ -74,6 +74,7 @@ let roomSeq = 1;
 
 io.on('connection', (socket) => {
   socket.on('joinGame', ({ roomId, nickname }) => {
+    console.log(`[joinGame] socket.id=${socket.id}, roomId=${roomId}, nickname=${nickname}`);
     if (!rooms[roomId]) return;
     rooms[roomId].players[socket.id] = { x: 100, y: 100, nickname };
     rooms[roomId].playerInputs = rooms[roomId].playerInputs || {};
@@ -86,6 +87,7 @@ io.on('connection', (socket) => {
         rooms[roomId].tokens.push(newToken);
       }
     }
+    console.log(`[joinGame] players in room ${roomId}:`, Object.keys(rooms[roomId].players));
     broadcastGameState(roomId);
   });
 
@@ -194,14 +196,40 @@ io.on('connection', (socket) => {
         console.log(`[ERROR] playerPush: player ${id} not found in room ${roomId}`);
     }
 });
-  
+
+  // survived 이벤트 처리
+  socket.on('survived', ({ roomId, nickname }) => {
+    const room = rooms[roomId];
+    if (!room) return;
+    if (!room.players[socket.id]) return;
+    room.players[socket.id].survived = true;
+    // 모든 남은 플레이어가 survived를 보냈는지 체크
+    const allSurvived = Object.values(room.players).every(p => p.survived);
+    if (allSurvived) {
+      const playerList = Object.entries(room.players).map(([id, info]) => ({ id, nickname: info.nickname }));
+      console.log(`[phaseChange] roomId=${roomId}, players:`, Object.keys(room.players), 'playerList:', playerList);
+      Object.keys(room.players).forEach(id => {
+        io.to(id).emit('phaseChange', { phase: 'pair', players: playerList });
+      });
+    }
+  });
+
+  // 게임2 입력 처리
+  socket.on('game2Input', ({ roomId, input }) => {
+    const room = rooms[roomId];
+    if (!room || !room.players[socket.id]) return;
+    // input: { x, y }
+    room.players[socket.id].x = input.x;
+    room.players[socket.id].y = input.y;
+  });
 });
 
 // 60fps 기준으로 위치 계산 및 broadcast (방별로)
 setInterval(() => {
   Object.entries(rooms).forEach(([roomId, room]) => {
+    // 기존 게임1 위치 계산 및 broadcast
     for (const id in room.players) {
-      const input = room.playerInputs[id] || {};
+      const input = room.playerInputs ? (room.playerInputs[id] || {}) : {};
       let dx = 0, dy = 0;
       const PLAYER_SPEED = 500 / 60; // 500px/sec, 60fps 기준 프레임당 이동량
       if (input.left) dx -= PLAYER_SPEED;
@@ -212,6 +240,8 @@ setInterval(() => {
       room.players[id].y = Math.max(20, Math.min(1080 - 20, room.players[id].y + dy));
     }
     broadcastGameState(roomId);
+    // 게임2용 실시간 동기화 (game2State)
+    io.to(roomId).emit('game2State', { players: room.players });
   });
 }, 1000/60);
 
