@@ -144,6 +144,8 @@ const GameScreen = () => {
     phaseRef.current = phase;
   }, [phase]);
   
+  const [mainTimer, setMainTimer] = useState(20);
+
   const [doorQuotas, setDoorQuotas] = useState<number[]>([]);
   const doorQuotasRef = useRef(doorQuotas);
   useEffect(() => {
@@ -178,13 +180,16 @@ const GameScreen = () => {
     if (!socket) return;
     if (!myIdRef.current && socket.id) myIdRef.current = socket.id;
 
-    const onGame2State = (data: { players: { [id: string]: PlayerState }, doorQuotas?: number[], doorRotation?: number }) => {
+    const onGame2State = (data: { players: { [id: string]: PlayerState }, doorQuotas?: number[], doorRotation?: number, remainingTime?: number }) => {
       setAllPlayers(data.players);
       if (data.doorQuotas) {
         setDoorQuotas(data.doorQuotas);
       }
       if (data.doorRotation !== undefined) {
         setDoorRotation(data.doorRotation);
+      }
+      if (data.remainingTime !== undefined) {
+        setMainTimer(data.remainingTime);
       }
       const myState = data.players[myIdRef.current!];
       if (myState && myState.roomIndex !== roomIndex) {
@@ -353,12 +358,16 @@ const GameScreen = () => {
 
   return (
     <div style={{ width: '100vw', height: '100vh', cursor: 'default' }}>
-       {phase === 'waiting' && timer > 0 && roomIndex === null && (
+       {(phase === 'waiting' || phase === 'playing') && roomIndex === null && (
         <div style={{
             position: 'fixed', top: 32, left: '50%', transform: 'translateX(-50%)',
-            fontSize: 100, color: '#fff', fontWeight: 'bold', zIndex: 1000
+            fontSize: phase === 'waiting' && timer > 0 ? 100 : 48, 
+            color: '#fff', 
+            fontWeight: 'bold', 
+            zIndex: 1000,
+            transition: 'font-size 0.3s ease-out'
         }}>
-            {timer}
+            {phase === 'waiting' && timer > 0 ? timer : mainTimer.toFixed(2)}
         </div>
       )}
       {roomIndex === null ? 

@@ -226,12 +226,13 @@ io.on('connection', (socket) => {
 
       // --- Rotation Sync Properties ---
       room.pairGameStartTime = Date.now() + 3000;
+      room.gameEndTime = room.pairGameStartTime + 20000; // 20 second game timer
       room.doorRotation = 0;
       room.rotationSpeed = 0.5; // Initial speed
       room.rotationDirection = 1; // Initial direction
       const firstChangeInterval = 5000 + Math.random() * 5000; // 5-10s
       room.nextRotationChangeTime = room.pairGameStartTime + firstChangeInterval;
-      delete room.lastUpdateTime; // Ensure it's reset for the new game
+      room.lastUpdateTime = room.pairGameStartTime;
 
       // 게임 2를 위해 플레이어 위치 및 상태 초기화
       Object.values(room.players).forEach(player => {
@@ -312,16 +313,19 @@ setInterval(() => {
           }
 
           // Update rotation based on current speed and direction
-          const delta = now - (room.lastUpdateTime || now);
+          const delta = now - room.lastUpdateTime;
           room.doorRotation += room.rotationSpeed * room.rotationDirection * (delta / 1000);
           room.lastUpdateTime = now;
       }
+      
+      const remainingTime = room.gameEndTime ? Math.max(0, (room.gameEndTime - now) / 1000) : 0;
 
       // 게임2용 실시간 동기화
       io.to(roomId).emit('game2State', { 
         players: room.players, 
         doorQuotas: room.doorQuotas,
-        doorRotation: room.doorRotation || 0
+        doorRotation: room.doorRotation || 0,
+        remainingTime
       });
     }
   });
