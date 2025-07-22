@@ -17,6 +17,13 @@ const GameScreen = () => {
   }, [allPlayers]);
   const myIdRef = useRef<string | null>(null);
 
+  const [phase, setPhase] = useState('waiting');
+  const [timer, setTimer] = useState(3);
+  const phaseRef = useRef(phase);
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
   const phaserRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
 
@@ -44,6 +51,24 @@ const GameScreen = () => {
       socket.off('game2State', onGame2State);
     };
   }, [roomId]);
+
+  // Timer effect
+  useEffect(() => {
+    if (phase === 'waiting') {
+      const countdown = setTimeout(() => {
+        setPhase('playing');
+      }, 3000);
+
+      const timerInterval = setInterval(() => {
+        setTimer(t => Math.max(0, t - 1));
+      }, 1000);
+
+      return () => {
+        clearTimeout(countdown);
+        clearInterval(timerInterval);
+      };
+    }
+  }, [phase]);
 
   // Phaser setup effect
   useEffect(() => {
@@ -83,13 +108,14 @@ const GameScreen = () => {
             let newX = myPlayer.x + (dx / len) * PLAYER_MOVE_SPEED * dt;
             let newY = myPlayer.y + (dy / len) * PLAYER_MOVE_SPEED * dt;
 
-            // Enforce circle boundary
-            const dist = Math.sqrt(newX * newX + newY * newY);
-            const radiusLimit = CIRCLE_RADIUS - PLAYER_RADIUS;
-            if (dist > radiusLimit) {
-              const angle = Math.atan2(newY, newX);
-              newX = Math.cos(angle) * radiusLimit;
-              newY = Math.sin(angle) * radiusLimit;
+            if (phaseRef.current === 'waiting') {
+              const dist = Math.sqrt(newX * newX + newY * newY);
+              const radiusLimit = CIRCLE_RADIUS - PLAYER_RADIUS;
+              if (dist > radiusLimit) {
+                const angle = Math.atan2(newY, newX);
+                newX = Math.cos(angle) * radiusLimit;
+                newY = Math.sin(angle) * radiusLimit;
+              }
             }
             
             const socket = getSocket();
@@ -101,8 +127,10 @@ const GameScreen = () => {
 
         // --- Rendering ---
         this.graphics.clear();
-        this.graphics.lineStyle(6, 0xffffff, 1);
-        this.graphics.strokeCircle(centerX, centerY, CIRCLE_RADIUS);
+        if (phaseRef.current === 'waiting') {
+          this.graphics.lineStyle(6, 0xffffff, 1);
+          this.graphics.strokeCircle(centerX, centerY, CIRCLE_RADIUS);
+        }
         
         // Render players
         Object.entries(allPlayersRef.current).forEach(([id, info]) => {
@@ -152,6 +180,14 @@ const GameScreen = () => {
 
   return (
     <div style={{ width: '100vw', height: '100vh', cursor: 'default' }}>
+       {phase === 'waiting' && timer > 0 && (
+        <div style={{
+            position: 'fixed', top: 32, left: '50%', transform: 'translateX(-50%)',
+            fontSize: 100, color: '#fff', fontWeight: 'bold', zIndex: 1000
+        }}>
+            {timer}
+        </div>
+      )}
       <div ref={phaserRef} />
     </div>
   );
