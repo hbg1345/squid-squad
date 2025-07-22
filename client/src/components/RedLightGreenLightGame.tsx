@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import './RedLightGreenLight.css';
 import { getSocket, disconnectSocket } from '../socket';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import AlphabetModal from './AlphabetModal';
 import ChatBox from './ChatBox';
 import GameDescriptionModal from './GameDescriptionModal';
@@ -31,6 +31,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
     private playerNickname: string = '';
     private youngheeListenerRegistered = false;
     private roomId: string = '';
+    private myCharacter: string = 'player.png';
 
     private visionAngle: number     = 60;   // 콘의 벌어짐 각도 (°)
     private visionDirection: number = 270;  // 시야가 향하는 기본 방향 (°)
@@ -64,12 +65,14 @@ class RedLightGreenLightScene extends Phaser.Scene {
      * Initializes the scene with data passed from the React component.
      * @param data - Data object containing the player's nickname.
      */
-    init(data: { playerNickname: string, roomId?: string }) {
-        const settingsData = this.sys.settings.data as { playerNickname?: string, roomId?: string };
+    init(data: { playerNickname: string, roomId?: string, character?: string }) {
+        const settingsData = this.sys.settings.data as { playerNickname?: string, roomId?: string, character?: string };
         const nickname = data?.playerNickname || settingsData?.playerNickname || '';
         const roomId = data?.roomId || settingsData?.roomId || '';
+        const character = data?.character || settingsData?.character || 'player.png';
         this.playerNickname = nickname;
         this.roomId = roomId;
+        this.myCharacter = character;
     }
 
     /**
@@ -79,6 +82,10 @@ class RedLightGreenLightScene extends Phaser.Scene {
         // 이미지 불러오기 
         this.load.image('younghee', '/younghee.png'); 
         this.load.image('player', '/player.png');
+        this.load.image('player2', '/player2.png');
+        this.load.image('player3', '/player3.png');
+        this.load.image('player4', '/player4.png');
+        this.load.image('player5', '/player5.png');
         this.load.image('token1', '/token1.png');
         this.load.image('token2', '/token2.png');
     }
@@ -132,7 +139,13 @@ class RedLightGreenLightScene extends Phaser.Scene {
             // 1. 없는 플레이어 생성
             Object.entries(data.players).forEach(([id, info]: [string, any]) => {
                 if (!this.players.has(id)) {
-                    const sprite = this.physics.add.sprite(info.x, info.y, 'player')
+                    // 내 플레이어는 선택한 캐릭터, 나머지는 기본
+                    let spriteKey = 'player';
+                    if (id === this.myId) {
+                        // Remove extension for Phaser key
+                        spriteKey = this.myCharacter.replace('.png', '');
+                    }
+                    const sprite = this.physics.add.sprite(info.x, info.y, spriteKey)
                         .setScale(0.5)
                         .setOrigin(0.5, 0.5);
                     const pr = sprite.displayWidth * 0.7; //player 충돌체의 반지름 
@@ -436,6 +449,8 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     const gameRef = useRef<HTMLDivElement>(null);
     const gameInstance = useRef<Phaser.Game | null>(null);
     const navigate = useNavigate();
+    const location = useLocation();
+    const selectedCharacter = location.state?.character || 'player.png';
 
     // 제한 시간 및 phase 상태 추가
     const [phase, setPhase] = useState<'waiting' | 'dead' | 'survived' | 'playing'>('waiting');
@@ -600,13 +615,13 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             setTimeout(() => {
                 if (gameInstance.current) {
                     gameInstance.current.scene.stop('RedLightGreenLightScene');
-                    gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname, roomId });
+                    gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname, roomId, character: selectedCharacter });
                 }
             }, 100);
         } else {
             // Phaser 인스턴스가 이미 있으면 scene.stop 후 scene.start
             gameInstance.current.scene.stop('RedLightGreenLightScene');
-            gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname, roomId });
+            gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname, roomId, character: selectedCharacter });
         }
         return () => {
             const socket = getSocket();
@@ -618,7 +633,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
                 gameInstance.current = null;
             }
         };
-    }, [playerNickname, roomId]); 
+    }, [playerNickname, roomId, selectedCharacter]); 
 
     const handleGoBack = () => {
         onGoBack();

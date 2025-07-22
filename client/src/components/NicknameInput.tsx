@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getSocket } from '../socket';
 import { MATCH_SIZE } from '../constants/game';
 import MatchingModal from '../MatchingModal';
+import CharacterSelectionModal from './CharacterSelectionModal';
 import './NicknameInput.css';
 
 const NicknameInput: React.FC = () => {
@@ -11,6 +12,8 @@ const NicknameInput: React.FC = () => {
     const [matchingCurrent, setMatchingCurrent] = useState(1);
     const [matchingTotal] = useState(MATCH_SIZE);
     const [elapsed, setElapsed] = useState(0);
+    const [showCharacterModal, setShowCharacterModal] = useState(false);
+    const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -25,7 +28,7 @@ const NicknameInput: React.FC = () => {
         const handleMatchingCount = (count: number) => setMatchingCurrent(count);
         const handleMatchFound = ({ roomId }: { roomId: string }) => {
             setShowMatchingModal(false);
-            navigate('/game1', { state: { roomId, playerNickname: nickname } });
+            navigate('/game1', { state: { roomId, playerNickname: nickname, character: selectedCharacter } });
         };
 
         getSocket().on('matchingCount', handleMatchingCount);
@@ -35,14 +38,20 @@ const NicknameInput: React.FC = () => {
             getSocket().off('matchingCount', handleMatchingCount);
             getSocket().off('matchFound', handleMatchFound);
         };
-    }, [navigate, nickname]);
+    }, [navigate, nickname, selectedCharacter]);
 
     const handleStartMatching = () => {
-        setShowMatchingModal(true);
+        setShowCharacterModal(true);
     };
 
     const handleCancelMatching = () => {
         setShowMatchingModal(false);
+    };
+
+    const handleCharacterSelect = (character: string) => {
+        setSelectedCharacter(character);
+        setShowCharacterModal(false);
+        setShowMatchingModal(true); // 이제 매칭 시작
     };
 
     return (
@@ -70,6 +79,11 @@ const NicknameInput: React.FC = () => {
                     게임 시작
                 </button>
             </div>
+            <CharacterSelectionModal
+                isOpen={showCharacterModal}
+                onClose={() => setShowCharacterModal(false)}
+                onGameStart={handleCharacterSelect}
+            />
             <MatchingModal
                 open={showMatchingModal}
                 onCancel={handleCancelMatching}
