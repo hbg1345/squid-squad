@@ -5,6 +5,7 @@ import { getSocket } from '../socket';
 
 const PLAYER_RADIUS = 16;
 const PLAYER_MOVE_SPEED = 180;
+const CIRCLE_RADIUS = 200;
 
 const GameScreen = () => {
   const location = useLocation();
@@ -53,13 +54,18 @@ const GameScreen = () => {
 
     class PairScene extends Phaser.Scene {
       cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+      graphics!: Phaser.GameObjects.Graphics;
 
       create() {
         this.cursors = this.input.keyboard!.createCursorKeys();
+        this.graphics = this.add.graphics();
       }
 
       update(time: number, delta: number) {
         const dt = delta / 1000;
+        const mainCam = this.cameras.main;
+        const centerX = mainCam.width / 2;
+        const centerY = mainCam.height / 2;
 
         // Handle player input
         const myPlayer = allPlayersRef.current[myIdRef.current!];
@@ -74,8 +80,17 @@ const GameScreen = () => {
 
           if (dx !== 0 || dy !== 0) {
             const len = Math.sqrt(dx * dx + dy * dy);
-            const newX = myPlayer.x + (dx / len) * PLAYER_MOVE_SPEED * dt;
-            const newY = myPlayer.y + (dy / len) * PLAYER_MOVE_SPEED * dt;
+            let newX = myPlayer.x + (dx / len) * PLAYER_MOVE_SPEED * dt;
+            let newY = myPlayer.y + (dy / len) * PLAYER_MOVE_SPEED * dt;
+
+            // Enforce circle boundary
+            const dist = Math.sqrt(newX * newX + newY * newY);
+            const radiusLimit = CIRCLE_RADIUS - PLAYER_RADIUS;
+            if (dist > radiusLimit) {
+              const angle = Math.atan2(newY, newX);
+              newX = Math.cos(angle) * radiusLimit;
+              newY = Math.sin(angle) * radiusLimit;
+            }
             
             const socket = getSocket();
             if(socket) {
@@ -84,11 +99,12 @@ const GameScreen = () => {
           }
         }
 
+        // --- Rendering ---
+        this.graphics.clear();
+        this.graphics.lineStyle(6, 0xffffff, 1);
+        this.graphics.strokeCircle(centerX, centerY, CIRCLE_RADIUS);
+        
         // Render players
-        const mainCam = this.cameras.main;
-        const centerX = mainCam.width / 2;
-        const centerY = mainCam.height / 2;
-
         Object.entries(allPlayersRef.current).forEach(([id, info]) => {
           if (!playerSprites[id]) {
             const isMe = id === myIdRef.current;
