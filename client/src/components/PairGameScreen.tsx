@@ -150,6 +150,12 @@ const GameScreen = () => {
     doorQuotasRef.current = doorQuotas;
   }, [doorQuotas]);
 
+  const [doorRotation, setDoorRotation] = useState(0);
+  const doorRotationRef = useRef(doorRotation);
+  useEffect(() => {
+    doorRotationRef.current = doorRotation;
+  }, [doorRotation]);
+
   const [roomIndex, setRoomIndex] = useState<number | null>(null);
 
   const handleEnterRoom = useCallback((index: number) => {
@@ -172,10 +178,13 @@ const GameScreen = () => {
     if (!socket) return;
     if (!myIdRef.current && socket.id) myIdRef.current = socket.id;
 
-    const onGame2State = (data: { players: { [id: string]: PlayerState }, doorQuotas?: number[] }) => {
+    const onGame2State = (data: { players: { [id: string]: PlayerState }, doorQuotas?: number[], doorRotation?: number }) => {
       setAllPlayers(data.players);
       if (data.doorQuotas) {
         setDoorQuotas(data.doorQuotas);
+      }
+      if (data.doorRotation !== undefined) {
+        setDoorRotation(data.doorRotation);
       }
       const myState = data.players[myIdRef.current!];
       if (myState && myState.roomIndex !== roomIndex) {
@@ -219,7 +228,6 @@ const GameScreen = () => {
       cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
       graphics!: Phaser.GameObjects.Graphics;
       doorPositions: { x: number; y: number; angle: number }[] = [];
-      doorRotation = 0;
       interactKey!: Phaser.Input.Keyboard.Key;
       quotaTexts: Phaser.GameObjects.Text[] = [];
 
@@ -242,10 +250,6 @@ const GameScreen = () => {
         const mainCam = this.cameras.main;
         const centerX = mainCam.width / 2;
         const centerY = mainCam.height / 2;
-
-        if (phaseRef.current === 'playing') {
-          this.doorRotation += ROTATION_SPEED * dt;
-        }
 
         const myPlayer = allPlayersRef.current[myIdRef.current!];
         if (myPlayer && myPlayer.roomIndex === null) {
@@ -276,7 +280,7 @@ const GameScreen = () => {
             this.doorPositions.forEach((pos, index) => {
               const requiredQuota = doorQuotasRef.current[index] ?? 0;
               if (requiredQuota > 0) {
-                const currentAngle = pos.angle + this.doorRotation;
+                const currentAngle = pos.angle + doorRotationRef.current;
                 const doorX = Math.cos(currentAngle) * DOOR_RADIUS;
                 const doorY = Math.sin(currentAngle) * DOOR_RADIUS;
                 const dist = Phaser.Math.Distance.Between(myPlayer.x, myPlayer.y, doorX, doorY);
@@ -294,7 +298,7 @@ const GameScreen = () => {
             const requiredQuota = doorQuotasRef.current[index] ?? 0;
 
             if (requiredQuota > 0) {
-              const currentAngle = pos.angle + this.doorRotation;
+              const currentAngle = pos.angle + doorRotationRef.current;
               const x = Math.cos(currentAngle) * DOOR_RADIUS;
               const y = Math.sin(currentAngle) * DOOR_RADIUS;
               this.graphics.fillRect(centerX + x - DOOR_WIDTH / 2, centerY + y - DOOR_HEIGHT / 2, DOOR_WIDTH, DOOR_HEIGHT);

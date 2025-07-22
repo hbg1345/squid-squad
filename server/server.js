@@ -224,6 +224,10 @@ io.on('connection', (socket) => {
       room.doorQuotas = quotas;
       // --- End of quota generation ---
 
+      // Add properties for door rotation sync
+      room.pairGameStartTime = Date.now() + 3000; // Sync with client's 3s waiting timer
+      room.doorRotation = 0;
+
       // 게임 2를 위해 플레이어 위치 및 상태 초기화
       Object.values(room.players).forEach(player => {
         player.x = 0;
@@ -288,8 +292,17 @@ setInterval(() => {
       }
       broadcastGameState(roomId);
     } else if (room.gameType === 'pair') {
-      // 게임2용 실시간 동기화만 (위치 계산 제거)
-      io.to(roomId).emit('game2State', { players: room.players, doorQuotas: room.doorQuotas });
+      const ROTATION_SPEED = 0.5; // radians per second, same as client
+      if (room.pairGameStartTime && Date.now() >= room.pairGameStartTime) {
+          const elapsedTime = (Date.now() - room.pairGameStartTime) / 1000; // seconds
+          room.doorRotation = elapsedTime * ROTATION_SPEED;
+      }
+      // 게임2용 실시간 동기화
+      io.to(roomId).emit('game2State', { 
+        players: room.players, 
+        doorQuotas: room.doorQuotas,
+        doorRotation: room.doorRotation || 0
+      });
     }
   });
 }, 1000/60);
