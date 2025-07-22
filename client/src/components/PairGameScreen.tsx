@@ -382,7 +382,7 @@ const GameScreen = () => {
 
   return (
     <div style={{ width: '100vw', height: '100vh', cursor: 'default' }}>
-       {(phase === 'waiting' || phase === 'playing') && roomIndex === null && (
+       {(phase === 'waiting' || phase === 'playing') && (
         <div style={{
             position: 'fixed', top: 32, left: '50%', transform: 'translateX(-50%)',
             fontSize: phase === 'waiting' && timer > 0 ? 100 : 48, 
