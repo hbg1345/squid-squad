@@ -38,40 +38,59 @@ const RoomScreen = forwardRef(({ onExit, myId, roomId, allPlayers, roomIndex }: 
       playerSprites: { [id: string]: Phaser.GameObjects.Arc } = {};
       nameTexts: { [id: string]: Phaser.GameObjects.Text } = {};
       cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-      exitKey!: Phaser.Input.Keyboard.Key;
+      interactKey!: Phaser.Input.Keyboard.Key;
+      graphics!: Phaser.GameObjects.Graphics;
 
       create() {
         this.cameras.main.setBackgroundColor('#333333');
         this.cursors = this.input.keyboard!.createCursorKeys();
-        this.exitKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
+        this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+        this.graphics = this.add.graphics();
         
         this.add.text(this.cameras.main.width / 2, 50, `Room ${roomIndex + 1}`, { fontSize: '32px' }).setOrigin(0.5);
-        this.add.text(this.cameras.main.width / 2, this.cameras.main.height - 50, `Press 'Q' to exit`, { fontSize: '24px' }).setOrigin(0.5);
+        this.add.text(this.cameras.main.width / 2, this.cameras.main.height - 50, `Press 'E' near the door to exit`, { fontSize: '24px' }).setOrigin(0.5);
       }
       
       update(time: number, delta: number) {
         const dt = delta / 1000;
-
-        if (Phaser.Input.Keyboard.JustDown(this.exitKey)) {
-          onExit();
-        }
-
+        const centerX = this.cameras.main.width / 2;
+        const centerY = this.cameras.main.height / 2;
+        
         const myRoomPlayer = allPlayersRef.current[myId!];
+        
+        // Input handling
         if (myRoomPlayer && myRoomPlayer.roomIndex === roomIndex) {
-            let dx = 0, dy = 0;
-            if (this.cursors.left.isDown) dx -= 1;
-            if (this.cursors.right.isDown) dx += 1;
-            if (this.cursors.up.isDown) dy -= 1;
-            if (this.cursors.down.isDown) dy += 1;
-
-            if (dx !== 0 || dy !== 0) {
-              const len = Math.sqrt(dx * dx + dy * dy);
-              const newX = myRoomPlayer.x + (dx/len) * PLAYER_MOVE_SPEED * dt;
-              const newY = myRoomPlayer.y + (dy/len) * PLAYER_MOVE_SPEED * dt;
-              socket.emit('game2Input', { roomId, input: { x: newX, y: newY } });
+          // Exit interaction
+          if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+            const dist = Phaser.Math.Distance.Between(myRoomPlayer.x, myRoomPlayer.y, 0, 0); // Door is at center
+            if (dist < DOOR_INTERACT_DIST) {
+              onExit();
+              return; // Exit to avoid movement on the same frame
             }
+          }
+
+          // Movement
+          let dx = 0, dy = 0;
+          if (this.cursors.left.isDown) dx -= 1;
+          if (this.cursors.right.isDown) dx += 1;
+          if (this.cursors.up.isDown) dy -= 1;
+          if (this.cursors.down.isDown) dy += 1;
+
+          if (dx !== 0 || dy !== 0) {
+            const len = Math.sqrt(dx * dx + dy * dy);
+            const newX = myRoomPlayer.x + (dx/len) * PLAYER_MOVE_SPEED * dt;
+            const newY = myRoomPlayer.y + (dy/len) * PLAYER_MOVE_SPEED * dt;
+            socket.emit('game2Input', { roomId, input: { x: newX, y: newY } });
+          }
         }
         
+        // Rendering
+        this.graphics.clear();
+        
+        // Draw center door
+        this.graphics.fillStyle(0x0000ff, 1);
+        this.graphics.fillRect(centerX - DOOR_WIDTH / 2, centerY - DOOR_HEIGHT / 2, DOOR_WIDTH, DOOR_HEIGHT);
+
         const roomPlayers = Object.entries(allPlayersRef.current).filter(([_, p]) => p.roomIndex === roomIndex);
 
         roomPlayers.forEach(([id, info]) => {
@@ -79,8 +98,8 @@ const RoomScreen = forwardRef(({ onExit, myId, roomId, allPlayers, roomIndex }: 
             this.playerSprites[id] = this.add.circle(0, 0, PLAYER_RADIUS, id === myId ? 0xff2a7f : 0x00bfff);
             this.nameTexts[id] = this.add.text(0, 0, info.nickname, { fontSize: '16px', color: '#fff' }).setOrigin(0.5);
           }
-          this.playerSprites[id].setPosition(this.cameras.main.width / 2 + info.x, this.cameras.main.height / 2 + info.y);
-          this.nameTexts[id].setPosition(this.cameras.main.width / 2 + info.x, this.cameras.main.height / 2 + info.y - PLAYER_RADIUS - 10);
+          this.playerSprites[id].setPosition(centerX + info.x, centerY + info.y);
+          this.nameTexts[id].setPosition(centerX + info.x, centerY + info.y - PLAYER_RADIUS - 10);
         });
 
         Object.keys(this.playerSprites).forEach(id => {
