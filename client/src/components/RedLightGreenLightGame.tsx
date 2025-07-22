@@ -97,7 +97,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
      */
     create() {
         this.myId = this.socket.id ?? '';
-        this.socket.emit('joinGame', { roomId: this.roomId, nickname: this.playerNickname });
+        this.socket.emit('joinGame', { roomId: this.roomId, nickname: this.playerNickname, character: this.myCharacter });
 
         // Set world bounds to be larger than the screen
         const worldWidth = 1950;
@@ -151,12 +151,8 @@ class RedLightGreenLightScene extends Phaser.Scene {
             // 1. 없는 플레이어 생성
             Object.entries(data.players).forEach(([id, info]: [string, any]) => {
                 if (!this.players.has(id)) {
-                    // 내 플레이어는 선택한 캐릭터, 나머지는 기본
-                    let spriteKey = 'player';
-                    if (id === this.myId) {
-                        // Remove extension for Phaser key
-                        spriteKey = this.myCharacter.replace('.png', '');
-                    }
+                    // 모든 플레이어 info.character 사용
+                    let spriteKey = (info.character || 'player').replace('.png', '');
                     const sprite = this.physics.add.sprite(info.x, info.y, spriteKey)
                         .setScale(0.5)
                         .setOrigin(0.5, 0.5);

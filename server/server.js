@@ -73,10 +73,10 @@ let rooms = {};
 let roomSeq = 1;
 
 io.on('connection', (socket) => {
-  socket.on('joinGame', ({ roomId, nickname }) => {
-    console.log(`[joinGame] socket.id=${socket.id}, roomId=${roomId}, nickname=${nickname}`);
+  socket.on('joinGame', ({ roomId, nickname, character }) => {
+    console.log(`[joinGame] socket.id=${socket.id}, roomId=${roomId}, nickname=${nickname}, character=${character}`);
     if (!rooms[roomId]) return;
-    rooms[roomId].players[socket.id] = { x: 100, y: 100, nickname };
+    rooms[roomId].players[socket.id] = { x: 100, y: 100, nickname, character };
     rooms[roomId].playerInputs = rooms[roomId].playerInputs || {};
     rooms[roomId].playerInputs[socket.id] = { left: false, right: false, up: false, down: false };
     // 토큰 초기화(없거나 비어 있으면 생성)
