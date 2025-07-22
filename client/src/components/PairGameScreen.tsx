@@ -456,6 +456,25 @@ const GameScreen = () => {
             </ul>
           </div>
         )}
+        <button
+          onClick={() => {
+            getSocket().disconnect();
+            window.location.href = '/';
+          }}
+          style={{
+            marginTop: '50px',
+            padding: '15px 35px',
+            fontSize: '20px',
+            cursor: 'pointer',
+            backgroundColor: '#f44336',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontWeight: 'bold',
+          }}
+        >
+          타이틀로 돌아가기
+        </button>
       </div>
     );
   }
