@@ -209,10 +209,11 @@ io.on('connection', (socket) => {
       const playerList = Object.entries(room.players).map(([id, info]) => ({ id, nickname: info.nickname }));
       console.log(`[phaseChange] roomId=${roomId}, players:`, Object.keys(room.players), 'playerList:', playerList);
       
-      // 게임 2를 위해 플레이어 위치 초기화
+      // 게임 2를 위해 플레이어 위치 및 상태 초기화
       Object.values(room.players).forEach(player => {
         player.x = 0;
         player.y = 0;
+        player.roomIndex = null; // 방 상태 초기화
         delete player.survived; // 상태 플래그 정리
       });
 
@@ -232,6 +233,23 @@ io.on('connection', (socket) => {
     // input: { x, y }
     room.players[socket.id].x = input.x;
     room.players[socket.id].y = input.y;
+  });
+
+  // 게임2 방 입장
+  socket.on('enterRoom', ({ roomId, roomIndex }) => {
+    const room = rooms[roomId];
+    if (!room || !room.players[socket.id]) return;
+    room.players[socket.id].roomIndex = roomIndex;
+    room.players[socket.id].x = 0;
+    room.players[socket.id].y = 0;
+  });
+
+  // 게임2 방 퇴장
+  socket.on('exitRoom', ({ roomId }) => {
+    const room = rooms[roomId];
+    if (!room || !room.players[socket.id]) return;
+    room.players[socket.id].roomIndex = null;
+    // x, y는 메인 씬에서 다시 동기화되므로 여기서 바꿀 필요 없음
   });
 });
 
