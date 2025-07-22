@@ -254,21 +254,13 @@ class RedLightGreenLightScene extends Phaser.Scene {
                 );
             }
         });
-    }
-
-    private lastInputState: { left: boolean, right: boolean, up: boolean, down: boolean } = { left: false, right: false, up: false, down: false };
-    private handleKeyInput() {
-        const input = {
-            left: this.cursors.left.isDown,
-            right: this.cursors.right.isDown,
-            up: this.cursors.up.isDown,
-            down: this.cursors.down.isDown
-        };
-        // 입력 상태가 바뀌었을 때만 emit
-        if (JSON.stringify(input) !== JSON.stringify(this.lastInputState)) {
-            this.socket.emit('playerInput', { roomId: this.roomId, input });
-            this.lastInputState = input;
-        }
+        this.socket.on('playerPushed', ({ id, x, y }) => {
+            const sprite = this.players.get(id);
+            if (sprite) {
+                sprite.x = x;
+                sprite.y = y;
+            }
+        });
     }
 
     private lastInputState: { left: boolean, right: boolean, up: boolean, down: boolean } = { left: false, right: false, up: false, down: false };
@@ -324,7 +316,48 @@ class RedLightGreenLightScene extends Phaser.Scene {
      * @param delta - The time elapsed since the last frame.
      */
     update(time: number, delta: number) {
-        if (!this.myId) return;
+        // 이 로그는 이미 동작하는 것을 확인했습니다.
+        // console.log('update called');
+        if (!this.myId || !this.players.get(this.myId)) return;
+
+        // --- 밀치기 기능 디버깅 ---
+        if (this.pushKey && Phaser.Input.Keyboard.JustDown(this.pushKey)) {
+            console.log('--- 스페이스바 눌림 감지! ---');
+            const mySprite = this.players.get(this.myId)!;
+            let collisionDetected = false;
+
+            this.players.forEach((otherSprite, id) => {
+                if (id === this.myId) return;
+
+                const dist = Phaser.Math.Distance.Between(mySprite.x, mySprite.y, otherSprite.x, otherSprite.y);
+                const myRadius = mySprite.displayWidth * 0.5;
+                const otherRadius = otherSprite.displayWidth * 0.7;
+                const requiredDist = myRadius + otherRadius + 30; // 충돌 인식 거리 조절 (30px)
+
+                console.log(`[충돌 확인] 대상: ${id}, 거리: ${dist.toFixed(2)}, 필요 거리: ${requiredDist.toFixed(2)}`);
+
+                if (dist <= requiredDist) {
+                    collisionDetected = true;
+                    console.log(`[충돌 성공!] 대상: ${id}! 서버에 밀치기 요청합니다.`);
+                    const dirs = [
+                        { dx: 0, dy: -1 }, // up
+                        { dx: 0, dy: 1 },  // down
+                        { dx: -1, dy: 0 }, // left
+                        { dx: 1, dy: 0 },  // right
+                    ];
+                    const dir = Phaser.Math.RND.pick(dirs);
+                    this.socket.emit('playerPush', { id, dx: dir.dx, dy: dir.dy });
+                }
+            });
+
+            if (!collisionDetected) {
+                console.log('[충돌 실패] 스페이스바는 눌렸지만, 충돌한 플레이어가 없습니다.');
+            }
+        }
+        // --- 디버깅 끝 ---
+
+
+        // --- 기존 update 로직 (그대로 두세요) ---
         const mySprite = this.players.get(this.myId);
         if (!mySprite) return;
         // 입력 상태 체크 및 emit
@@ -364,50 +397,13 @@ class RedLightGreenLightScene extends Phaser.Scene {
             this.socket.emit('playerInput', input);
             this.lastInputState = { ...input };
         }
-        this.playerNameTexts.get(this.myId)?.setPosition(mySprite.x, mySprite.y - 30);
+        this.playerNameTexts.forEach((nameText, id) => {
+            const sprite = this.players.get(id);
+            if (sprite) {
+                nameText.setPosition(sprite.x, sprite.y - sprite.displayHeight / 2 - nameText.height - 2);
+            }
+        });
         this.physics.overlap(mySprite, this.tokens, this.handleCollectToken, undefined, this);
-
-        // space key를 한 번 누르면 푸쉬
-        if (Phaser.Input.Keyboard.JustDown(this.pushKey)) {
-            const mySprite = this.players.get(this.myId)!;
-            const myRadius = mySprite.displayWidth * 0.5;
-            const padding = 20;        // 충돌 감지 시 추가 여유치
-            const offset = 100;        // 밀어낼 때 움직일 픽셀 수
-            this.players.forEach((otherSprite, id) => {
-                if (id === this.myId) return;
-                // 1) 두 플레이어 사이 거리 계산
-                const dxTotal = otherSprite.x - mySprite.x;
-                const dyTotal = otherSprite.y - mySprite.y;
-                const dist = Math.hypot(dxTotal, dyTotal);
-                const otherRadius = otherSprite.displayWidth * 0.7;
-                // 2) 충돌 판정: 두 원이 서로 닿았으면 
-                if (dist <= myRadius + otherRadius + padding) {
-                    // 3) 밀어낼 방향 선택 (랜덤덤)
-                    const dir = Phaser.Math.RND.pick(['up','down','left','right']);
-                    let dx = 0, dy = 0;
-                    switch (dir){
-                        case 'up':    dy = -offset; break;
-                        case 'down':  dy =  offset; break;
-                        case 'left':  dx = -offset; break;
-                        case 'right': dx =  offset; break;
-                    }
-                    // 4) 즉시 위치 변경
-                    otherSprite.x += dx;
-                    otherSprite.y += dy;
-
-                     // 닉네임 텍스트도 같이 이동
-                     const nameText = this.playerNameTexts.get(id);
-                     if (nameText) {
-                        nameText.setPosition(
-                            otherSprite.x,
-                            otherSprite.y - otherSprite.displayHeight/2 - nameText.height - 2
-                        );
-                    }
-                    // 5) 서버에 동기화 요청
-                    this.socket.emit('playerPush', { id, dx, dy });
-                }
-            })
-        }
     }
 
     // moveYounghee 제거 (서버 동기화로 대체)
@@ -464,7 +460,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
 
     // 제한 시간 및 phase 상태 추가
     const [phase, setPhase] = useState<'waiting' | 'dead' | 'survived' | 'playing'>('waiting');
-    const [timer, setTimer] = useState(10);
+    const [timer, setTimer] = useState(60);
     const [tokenCount, setTokenCount] = useState(0);
     const [showAlphabetModal, setShowAlphabetModal] = useState(false);
     const [invincibleUntil, setInvincibleUntil] = useState(0);
@@ -521,7 +517,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     // phase가 바뀔 때마다 타이머/토큰 초기화 (dead->waiting 등)
     useEffect(() => {
         if (phase === 'waiting') {
-            setTimer(10);
+            setTimer(60);
             setTokenCount(0);
         }
     }, [phase]);

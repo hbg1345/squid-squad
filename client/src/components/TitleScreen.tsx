@@ -456,6 +456,7 @@ const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
                     <button
                         className="start-button"
                         onClick={handleStartGame}
+                        disabled={!nickname.trim()} // 닉네임이 없으면 비활성화
                     >
                         Start Game
                     </button>
