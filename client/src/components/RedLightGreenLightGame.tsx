@@ -80,7 +80,9 @@ class RedLightGreenLightScene extends Phaser.Scene {
      */
     preload() {
         // 이미지 불러오기 
-        this.load.image('younghee', '/younghee.png'); 
+        this.load.image('background', '/background.png');
+        this.load.image('younghee', '/younghee.png');
+        // 모든 플레이어 캐릭터 이미지 로드
         this.load.image('player', '/player.png');
         this.load.image('player2', '/player2.png');
         this.load.image('player3', '/player3.png');
@@ -96,8 +98,18 @@ class RedLightGreenLightScene extends Phaser.Scene {
     create() {
         this.myId = this.socket.id ?? '';
         this.socket.emit('joinGame', { roomId: this.roomId, nickname: this.playerNickname });
+
+        // Set world bounds to be larger than the screen
+        const worldWidth = 1950;
+        const worldHeight = 1000;
+        // Add background image and set world bounds
+        this.add.image(0, 0, 'background').setOrigin(0, 0).setDisplaySize(worldWidth, worldHeight);
+        this.physics.world.setBounds(0, 0, worldWidth, worldHeight);
+        // Set camera bounds
+        this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
+
         // Set a light grey background color as in the image
-        this.cameras.main.setBackgroundColor('#F0F0F0');
+        // this.cameras.main.setBackgroundColor('#F0F0F0');
 
         // 1. Current Survivors Display
         this.survivorText = this.add.text(this.scale.width / 2, 50, '현재 생존자: 200/456', {
@@ -105,7 +117,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
             color: '#000000',
             fontFamily: 'Arial, sans-serif',
             fontStyle: 'bold'
-        }).setOrigin(0.5); // Center horizontally
+        }).setOrigin(0.5).setScrollFactor(0); // Center horizontally, fixed to screen
 
         // 2. Younghee (Doll) Implementation
         // Initial Younghee position (randomized later)
@@ -227,7 +239,8 @@ class RedLightGreenLightScene extends Phaser.Scene {
           .text(this.scale.width - 100, margin, '먹은 토큰: 0', {
             fontSize: '16px', color: '#000'
           })
-          .setOrigin(1, 0); // 오른쪽 상단에 위치
+          .setOrigin(1, 0)
+          .setScrollFactor(0); // 오른쪽 상단에 위치, fixed to screen
         // 토큰 그룹 생성
         this.tokens = this.physics.add.group();
 
