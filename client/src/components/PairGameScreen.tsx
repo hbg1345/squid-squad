@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { useLocation } from 'react-router-dom';
 import { getSocket } from '../socket';
 import ChatBox from './ChatBox';
+import GameDescriptionModal from './GameDescriptionModal';
 
 const PLAYER_RADIUS = 16;
 const PLAYER_MOVE_SPEED = 180;
@@ -143,6 +144,8 @@ const GameScreen = () => {
   }, [allPlayers]);
   const myIdRef = useRef<string | null>(null);
 
+  const [isDescribing, setIsDescribing] = useState(true);
+  const [isGameStarted, setIsGameStarted] = useState(false);
   const [phase, setPhase] = useState('waiting');
   const [timer, setTimer] = useState(3);
   const phaseRef = useRef(phase);
@@ -226,8 +229,29 @@ const GameScreen = () => {
     };
   }, [roomId, roomIndex]);
 
+  // 모달 표시 및 준비 완료 신호 전송
   useEffect(() => {
-    if (phase === 'waiting') {
+    const timer = setTimeout(() => {
+        setIsDescribing(false);
+        if (roomId) {
+            getSocket().emit('clientReady', { roomId });
+        }
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [roomId]);
+
+  // 게임 시작 신호 수신
+  useEffect(() => {
+      const onGameStart = () => setIsGameStarted(true);
+      const socket = getSocket();
+      socket.on('gameStart', onGameStart);
+      return () => {
+          socket.off('gameStart', onGameStart);
+      };
+  }, []);
+
+  useEffect(() => {
+    if (phase === 'waiting' && isGameStarted) {
       const countdown = setTimeout(() => setPhase('playing'), 3000);
       const timerInterval = setInterval(() => setTimer(t => Math.max(0, t - 1)), 1000);
       return () => {
@@ -235,7 +259,7 @@ const GameScreen = () => {
         clearInterval(timerInterval);
       };
     }
-  }, [phase]);
+  }, [phase, isGameStarted]);
   
   const enterRoomRef = useRef(handleEnterRoom);
   useEffect(() => { enterRoomRef.current = handleEnterRoom; }, [handleEnterRoom]);
@@ -419,8 +443,21 @@ const GameScreen = () => {
 
   return (
     <div style={{ width: '100vw', height: '100vh', cursor: 'default' }}>
+       <GameDescriptionModal
+        isOpen={isDescribing}
+        title="단짝을 찾아라"
+        description={[
+            "20초 안에, 문 위에 표시된 숫자만큼 인원을 맞춰 들어가세요.",
+            "성공한 방의 플레이어만 생존합니다.",
+        ]}
+      />
+       {!isDescribing && !isGameStarted && (
+            <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white', fontSize: '24px', zIndex: 4000, pointerEvents: 'none' }}>
+                다른 플레이어를 기다리는 중...
+            </div>
+      )}
       {/* Timer */}
-      {(phase === 'waiting' || phase === 'playing') && (
+      {(phase === 'waiting' || phase === 'playing') && isGameStarted && (
         <div style={{
             position: 'fixed', top: 32, left: '50%', transform: 'translateX(-50%)',
             fontSize: phase === 'waiting' && timer > 0 ? 100 : 48, 

@@ -133,7 +133,7 @@ io.on('connection', (socket) => {
       if (waitingPlayers.length >= MATCH_SIZE) {
         const matched = waitingPlayers.splice(0, MATCH_SIZE);
         const roomId = `room${roomSeq++}`;
-        rooms[roomId] = { players: {}, tokens: [], created: Date.now(), younghee: { x: 360, y: 180 }, gameType: 'redlight' };
+        rooms[roomId] = { players: {}, tokens: [], created: Date.now(), younghee: { x: 360, y: 180 }, gameType: 'redlight', readyPlayers: new Set() };
         matched.forEach(s => {
           s.join(roomId);
           s.emit('matchFound', { roomId });
@@ -225,15 +225,12 @@ io.on('connection', (socket) => {
       // --- End of quota generation ---
 
       // --- Rotation Sync Properties ---
-      room.pairGameStartTime = Date.now() + 3000;
-      room.gameEndTime = room.pairGameStartTime + 20000; // 20 second game timer
+      // 타이머 관련 값들은 이제 'gameStart' 이벤트에서 설정되므로 여기서 제거.
       room.doorRotation = 0;
       room.rotationSpeed = 0.5; // Initial speed
       room.rotationDirection = 1; // Initial direction
-      const firstChangeInterval = 5000 + Math.random() * 5000; // 5-10s
-      room.nextRotationChangeTime = room.pairGameStartTime + firstChangeInterval;
-      room.lastUpdateTime = room.pairGameStartTime;
       room.isGame2Finished = false;
+      room.readyPlayers.clear(); // Use clear() for Sets
 
       // 게임 2를 위해 플레이어 위치 및 상태 초기화
       Object.values(room.players).forEach(player => {
@@ -276,6 +273,28 @@ io.on('connection', (socket) => {
     if (!room || !room.players[socket.id]) return;
     room.players[socket.id].roomIndex = null;
     // x, y는 메인 씬에서 다시 동기화되므로 여기서 바꿀 필요 없음
+  });
+
+  socket.on('clientReady', ({ roomId }) => {
+    const room = rooms[roomId];
+    if (!room || !room.players[socket.id]) return;
+
+    room.readyPlayers.add(socket.id);
+
+    const playerCount = Object.keys(room.players).length;
+    if (playerCount > 0 && room.readyPlayers.size === playerCount) {
+        // All players are ready, start the game for this room.
+        io.to(roomId).emit('gameStart');
+
+        // Start server-side timers for Game 2
+        if (room.gameType === 'pair') {
+            const now = Date.now();
+            room.pairGameStartTime = now + 3000;
+            room.gameEndTime = room.pairGameStartTime + 20000;
+            room.nextRotationChangeTime = room.pairGameStartTime;
+            room.lastUpdateTime = room.pairGameStartTime;
+        }
+    }
   });
 });
 

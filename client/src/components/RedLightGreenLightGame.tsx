@@ -5,6 +5,7 @@ import { getSocket, disconnectSocket } from '../socket';
 import { useNavigate } from 'react-router-dom';
 import AlphabetModal from './AlphabetModal';
 import ChatBox from './ChatBox';
+import GameDescriptionModal from './GameDescriptionModal';
 
 // Vite 환경변수 타입 선언 (없으면 추가)
 declare global {
@@ -443,10 +444,33 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     const [showAlphabetModal, setShowAlphabetModal] = useState(false);
     const [invincibleUntil, setInvincibleUntil] = useState(0);
     const [isChatting, setIsChatting] = useState(false);
+    const [isDescribing, setIsDescribing] = useState(true);
+    const [isGameStarted, setIsGameStarted] = useState(false);
+
+    // 모달 표시 및 준비 완료 신호 전송
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setIsDescribing(false);
+            if (roomId) {
+                getSocket().emit('clientReady', { roomId });
+            }
+        }, 5000);
+        return () => clearTimeout(timer);
+    }, [roomId]);
+
+    // 게임 시작 신호 수신
+    useEffect(() => {
+        const onGameStart = () => setIsGameStarted(true);
+        const socket = getSocket();
+        socket.on('gameStart', onGameStart);
+        return () => {
+            socket.off('gameStart', onGameStart);
+        };
+    }, []);
 
     // 타이머 감소 로직
     useEffect(() => {
-        if (phase === 'waiting') {
+        if (phase === 'waiting' && isGameStarted) {
             let last = Date.now();
             const id = setInterval(() => {
                 const now = Date.now();
@@ -456,7 +480,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             }, 50);
             return () => clearInterval(id);
         }
-    }, [phase]);
+    }, [phase, isGameStarted]);
 
     // 타이머가 0이 되면 토큰 개수에 따라 phase 분기
     useEffect(() => {
@@ -623,6 +647,19 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
 
     return (
         <div className="game-screen">
+            <GameDescriptionModal
+              isOpen={isDescribing}
+              title="무궁화 꽃이 피었습니다"
+              description={[
+                "술래가 뒤를 돌아볼 때 움직이면 탈락합니다.",
+                "제한 시간 내에 20개의 토큰 중 1개 이상을 획득하여 술래에게 돌아오세요.",
+              ]}
+            />
+            {!isDescribing && !isGameStarted && (
+                 <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white', fontSize: '24px', zIndex: 4000, pointerEvents: 'none' }}>
+                    다른 플레이어를 기다리는 중...
+                </div>
+            )}
             {timerUI}
             {/* 채팅창 */}
             {roomId && (
