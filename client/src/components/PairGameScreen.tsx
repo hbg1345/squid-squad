@@ -54,9 +54,15 @@ const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, all
         this.load.image('player3', '/player3.png');
         this.load.image('player4', '/player4.png');
         this.load.image('player5', '/player5.png');
+        this.load.image('background2', '/background2.png');
       }
 
       create() {
+        // Add background2 image, stretched to fill
+        this.add.image(this.cameras.main.width / 2, this.cameras.main.height / 2, 'background2')
+          .setOrigin(0.5)
+          .setDisplaySize(this.cameras.main.width, this.cameras.main.height)
+          .setDepth(-100);
         this.cameras.main.setBackgroundColor('#333333');
         this.cursors = this.input.keyboard!.createCursorKeys();
         this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
@@ -349,6 +355,7 @@ const GameScreen = () => {
         this.load.image('particle1', '/Particle Effect 1.png');
         this.load.image('particle2', '/Particle Effect 2.png');
         this.load.image('particle3', '/Particle Effect 3.png');
+        this.load.image('background2', '/background2.png');
       }
 
       init(data: { isChattingRef: React.RefObject<boolean> }) {
@@ -356,6 +363,12 @@ const GameScreen = () => {
       }
 
       create() {
+        // Add background2 image, stretched to fill
+        this.add.image(this.cameras.main.width / 2, this.cameras.main.height / 2, 'background2')
+          .setOrigin(0.5)
+          .setDisplaySize(this.cameras.main.width, this.cameras.main.height)
+          .setDepth(-100);
+        this.cameras.main.setBackgroundColor('#333333');
         this.cursors = this.input.keyboard!.createCursorKeys();
         this.graphics = this.add.graphics();
         this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
