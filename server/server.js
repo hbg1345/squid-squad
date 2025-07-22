@@ -209,6 +209,21 @@ io.on('connection', (socket) => {
       const playerList = Object.entries(room.players).map(([id, info]) => ({ id, nickname: info.nickname }));
       console.log(`[phaseChange] roomId=${roomId}, players:`, Object.keys(room.players), 'playerList:', playerList);
       
+      const playerCount = Object.keys(room.players).length;
+      
+      // --- Generate door quotas ---
+      const DOOR_COUNT = 10;
+      const totalQuotaSum = playerCount > 0 ? Math.max(1, playerCount - 2) : 0;
+      const quotas = new Array(DOOR_COUNT).fill(0);
+
+      for (let i = 0; i < totalQuotaSum; i++) {
+          const doorIndex = Math.floor(Math.random() * DOOR_COUNT);
+          quotas[doorIndex]++;
+      }
+      
+      room.doorQuotas = quotas;
+      // --- End of quota generation ---
+
       // 게임 2를 위해 플레이어 위치 및 상태 초기화
       Object.values(room.players).forEach(player => {
         player.x = 0;
@@ -274,7 +289,7 @@ setInterval(() => {
       broadcastGameState(roomId);
     } else if (room.gameType === 'pair') {
       // 게임2용 실시간 동기화만 (위치 계산 제거)
-      io.to(roomId).emit('game2State', { players: room.players });
+      io.to(roomId).emit('game2State', { players: room.players, doorQuotas: room.doorQuotas });
     }
   });
 }, 1000/60);

@@ -124,6 +124,12 @@ const GameScreen = () => {
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
+  
+  const [doorQuotas, setDoorQuotas] = useState<number[]>([]);
+  const doorQuotasRef = useRef(doorQuotas);
+  useEffect(() => {
+    doorQuotasRef.current = doorQuotas;
+  }, [doorQuotas]);
 
   const [roomIndex, setRoomIndex] = useState<number | null>(null);
 
@@ -147,8 +153,11 @@ const GameScreen = () => {
     if (!socket) return;
     if (!myIdRef.current && socket.id) myIdRef.current = socket.id;
 
-    const onGame2State = (data: { players: { [id: string]: PlayerState } }) => {
+    const onGame2State = (data: { players: { [id: string]: PlayerState }, doorQuotas?: number[] }) => {
       setAllPlayers(data.players);
+      if (data.doorQuotas) {
+        setDoorQuotas(data.doorQuotas);
+      }
       const myState = data.players[myIdRef.current!];
       if (myState && myState.roomIndex !== roomIndex) {
         setRoomIndex(myState.roomIndex);
@@ -193,6 +202,7 @@ const GameScreen = () => {
       doorPositions: { x: number; y: number; angle: number }[] = [];
       doorRotation = 0;
       interactKey!: Phaser.Input.Keyboard.Key;
+      quotaTexts: Phaser.GameObjects.Text[] = [];
 
       create() {
         this.cursors = this.input.keyboard!.createCursorKeys();
@@ -202,6 +212,9 @@ const GameScreen = () => {
         for (let i = 0; i < DOOR_COUNT; i++) {
           const angle = (i / DOOR_COUNT) * Math.PI * 2;
           this.doorPositions.push({ x: 0, y: 0, angle });
+          this.quotaTexts.push(
+            this.add.text(0, 0, '', { fontSize: '18px', color: '#fff', align: 'center' }).setOrigin(0.5)
+          );
         }
       }
 
@@ -255,11 +268,16 @@ const GameScreen = () => {
         
         this.graphics.clear();
         this.graphics.fillStyle(0x0000ff, 1);
-        this.doorPositions.forEach(pos => {
+        this.doorPositions.forEach((pos, index) => {
             const currentAngle = pos.angle + this.doorRotation;
             const x = Math.cos(currentAngle) * DOOR_RADIUS;
             const y = Math.sin(currentAngle) * DOOR_RADIUS;
             this.graphics.fillRect(centerX + x - DOOR_WIDTH / 2, centerY + y - DOOR_HEIGHT / 2, DOOR_WIDTH, DOOR_HEIGHT);
+            
+            const currentPlayersInRoom = Object.values(allPlayersRef.current).filter(p => p.roomIndex === index).length;
+            const requiredQuota = doorQuotasRef.current[index] ?? 0;
+            const text = `${currentPlayersInRoom}/${requiredQuota}`;
+            this.quotaTexts[index].setText(text).setPosition(centerX + x, centerY + y - DOOR_HEIGHT / 2 - 15);
         });
 
         if (phaseRef.current === 'waiting') {
