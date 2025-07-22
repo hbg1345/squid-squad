@@ -335,6 +335,9 @@ const GameScreen = () => {
       isChattingRef!: React.RefObject<boolean>;
       pushKey!: Phaser.Input.Keyboard.Key;
       portalImgs: (Phaser.GameObjects.Image | null)[] = [];
+      portalParticles: ([Phaser.GameObjects.Image, Phaser.GameObjects.Image, Phaser.GameObjects.Image] | null)[] = [];
+      portalBurstTimers: number[] = [];
+      prevPlayersInRoom: number[] = [];
 
       preload() {
         this.load.image('player', '/player.png');
@@ -342,7 +345,10 @@ const GameScreen = () => {
         this.load.image('player3', '/player3.png');
         this.load.image('player4', '/player4.png');
         this.load.image('player5', '/player5.png');
-        this.load.image('portal', '/portal.png');
+        this.load.image('portal', '/Portal.png');
+        this.load.image('particle1', '/Particle Effect 1.png');
+        this.load.image('particle2', '/Particle Effect 2.png');
+        this.load.image('particle3', '/Particle Effect 3.png');
       }
 
       init(data: { isChattingRef: React.RefObject<boolean> }) {
@@ -449,24 +455,65 @@ const GameScreen = () => {
         this.graphics.clear();
         this.doorPositions.forEach((pos, index) => {
           const requiredQuota = doorQuotasRef.current[index] ?? 0;
+          // Track previous player count for burst effect
+          if (!this.prevPlayersInRoom) this.prevPlayersInRoom = [];
+          const currentPlayersInRoom = Object.values(allPlayersRef.current).filter(p => p.roomIndex === index).length;
+          if (this.prevPlayersInRoom[index] === undefined) this.prevPlayersInRoom[index] = currentPlayersInRoom;
+          if (currentPlayersInRoom > this.prevPlayersInRoom[index]) {
+            // Player entered: start burst
+            this.portalBurstTimers[index] = time + 500; // 0.5s burst
+          }
+          this.prevPlayersInRoom[index] = currentPlayersInRoom;
           if (requiredQuota > 0) {
             const currentAngle = pos.angle + doorRotationRef.current;
             const x = Math.cos(currentAngle) * DOOR_RADIUS;
             const y = Math.sin(currentAngle) * DOOR_RADIUS;
             // Draw portal image
             if (!this.portalImgs[index]) {
-              this.portalImgs[index] = this.add.image(centerX + x, centerY + y, 'portal').setOrigin(0.5).setScale(0.7);
+              this.portalImgs[index] = this.add.image(centerX + x, centerY + y, 'portal').setOrigin(0.5).setScale(2);
+              // Add 3 particle images, overlayed
+              const p1 = this.add.image(centerX + x, centerY + y, 'particle1').setOrigin(0.5).setScale(2.1);
+              const p2 = this.add.image(centerX + x, centerY + y, 'particle2').setOrigin(0.5).setScale(2.1);
+              const p3 = this.add.image(centerX + x, centerY + y, 'particle3').setOrigin(0.5).setScale(2.1);
+              this.portalParticles[index] = [p1, p2, p3];
             } else {
               this.portalImgs[index]!.setPosition(centerX + x, centerY + y);
               this.portalImgs[index]!.setVisible(true);
+              if (this.portalParticles[index]) {
+                this.portalParticles[index]![0].setPosition(centerX + x, centerY + y).setVisible(true);
+                this.portalParticles[index]![1].setPosition(centerX + x, centerY + y).setVisible(true);
+                this.portalParticles[index]![2].setPosition(centerX + x, centerY + y).setVisible(true);
+              }
+            }
+            // Animate particle alpha for sparkling effect or burst
+            if (this.portalParticles[index]) {
+              if (this.portalBurstTimers[index] && time < this.portalBurstTimers[index]) {
+                // Burst: rapidly alternate visibility
+                const burstFrame = Math.floor((this.portalBurstTimers[index] - time) / 80) % 3;
+                for (let i = 0; i < 3; ++i) {
+                  this.portalParticles[index]![i].setAlpha(i === burstFrame ? 1 : 0);
+                }
+              } else {
+                const t = time / 1000;
+                this.portalParticles[index]![0].setAlpha(0.5 + 0.5 * Math.sin(t * 2 + index));
+                this.portalParticles[index]![1].setAlpha(0.5 + 0.5 * Math.sin(t * 2.5 + index + 1));
+                this.portalParticles[index]![2].setAlpha(0.5 + 0.5 * Math.sin(t * 3 + index + 2));
+                this.portalBurstTimers[index] = 0;
+              }
             }
             // Quota text
-            const currentPlayersInRoom = Object.values(allPlayersRef.current).filter(p => p.roomIndex === index).length;
             const text = `${currentPlayersInRoom}/${requiredQuota}`;
             this.quotaTexts[index].setText(text).setPosition(centerX + x, centerY + y - 70).setVisible(true);
           } else {
             this.quotaTexts[index].setVisible(false);
             if (this.portalImgs[index]) { this.portalImgs[index]!.setVisible(false); }
+            if (this.portalParticles[index]) {
+              this.portalParticles[index]![0].setVisible(false);
+              this.portalParticles[index]![1].setVisible(false);
+              this.portalParticles[index]![2].setVisible(false);
+            }
+            this.portalBurstTimers[index] = 0;
+            if (this.prevPlayersInRoom) this.prevPlayersInRoom[index] = 0;
           }
         });
 
