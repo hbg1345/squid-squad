@@ -233,6 +233,7 @@ io.on('connection', (socket) => {
       const firstChangeInterval = 5000 + Math.random() * 5000; // 5-10s
       room.nextRotationChangeTime = room.pairGameStartTime + firstChangeInterval;
       room.lastUpdateTime = room.pairGameStartTime;
+      room.isGame2Finished = false;
 
       // 게임 2를 위해 플레이어 위치 및 상태 초기화
       Object.values(room.players).forEach(player => {
@@ -299,6 +300,37 @@ setInterval(() => {
       broadcastGameState(roomId);
     } else if (room.gameType === 'pair') {
       const now = Date.now();
+
+      // Check for game end condition first
+      if (!room.isGame2Finished && room.gameEndTime && now >= room.gameEndTime) {
+          room.isGame2Finished = true; // Mark as finished
+
+          const successfulRooms = new Set();
+          const playersByRoom = {};
+
+          Object.values(room.players).forEach(p => {
+              if (p.roomIndex !== null) {
+                  if (!playersByRoom[p.roomIndex]) playersByRoom[p.roomIndex] = [];
+                  playersByRoom[p.roomIndex].push(p);
+              }
+          });
+
+          room.doorQuotas.forEach((quota, index) => {
+              const playersInRoom = playersByRoom[index] ? playersByRoom[index].length : 0;
+              if (playersInRoom > 0 && playersInRoom === quota) {
+                  successfulRooms.add(index);
+              }
+          });
+
+          Object.entries(room.players).forEach(([id, player]) => {
+              if (player.roomIndex !== null && successfulRooms.has(player.roomIndex)) {
+                  io.to(id).emit('game2End', { result: 'survived' });
+              } else {
+                  io.to(id).emit('game2End', { result: 'died' });
+              }
+          });
+          return; // Stop further processing for this finished room
+      }
 
       // Only start logic after waiting period
       if (room.pairGameStartTime && now >= room.pairGameStartTime) {

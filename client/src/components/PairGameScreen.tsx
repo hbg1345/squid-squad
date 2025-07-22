@@ -145,6 +145,7 @@ const GameScreen = () => {
   }, [phase]);
   
   const [mainTimer, setMainTimer] = useState(20);
+  const [gameResult, setGameResult] = useState<'survived' | 'died' | null>(null);
 
   const [doorQuotas, setDoorQuotas] = useState<number[]>([]);
   const doorQuotasRef = useRef(doorQuotas);
@@ -196,9 +197,21 @@ const GameScreen = () => {
         setRoomIndex(myState.roomIndex);
       }
     };
+    const onGameEnd = ({ result }: { result: 'survived' | 'died' }) => {
+      setGameResult(result);
+      if (result === 'died') {
+        setTimeout(() => {
+          getSocket().disconnect();
+          window.location.href = '/';
+        }, 1500);
+      }
+    };
+
     socket.on('game2State', onGame2State);
+    socket.on('game2End', onGameEnd);
     return () => {
       socket.off('game2State', onGame2State);
+      socket.off('game2End', onGameEnd);
     };
   }, [roomId, roomIndex]);
 
@@ -355,6 +368,17 @@ const GameScreen = () => {
       }
     };
   }, [roomIndex]);
+
+  if (gameResult) {
+    return (
+      <div style={{
+        width: '100vw', height: '100vh', background: '#111', color: '#fff',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 60, fontWeight: 'bold'
+      }}>
+        {gameResult === 'survived' ? '생존!' : '사망'}
+      </div>
+    );
+  }
 
   return (
     <div style={{ width: '100vw', height: '100vh', cursor: 'default' }}>
