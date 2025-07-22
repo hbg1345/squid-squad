@@ -1,399 +1,462 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import Phaser from 'phaser';
+import { useLocation } from 'react-router-dom';
+import { getSocket } from '../socket';
+import ChatBox from './ChatBox';
 
-const CIRCLE_RADIUS = 200;
 const PLAYER_RADIUS = 16;
-const ROTATION_SPEED = 0.5;
 const PLAYER_MOVE_SPEED = 180;
-const WAIT_TIME = 3; // 원 회전 시간
-const ENTER_TIME = 5; // 방 진입 제한 시간
+const CIRCLE_RADIUS = 200;
 const DOOR_COUNT = 10;
-const DOOR_INTERACT_DIST = 40;
 const DOOR_WIDTH = 32;
 const DOOR_HEIGHT = 48;
-const DOOR_RADIUS = CIRCLE_RADIUS + 80;
+const DOOR_RADIUS = CIRCLE_RADIUS + 150;
+const ROTATION_SPEED = 0.5; // radians per second
+const DOOR_INTERACT_DIST = 40;
 
-// 방 내부 화면 Phaser로 구현 (동일)
-function RoomScreen({ roomIndex, onExit }: { roomIndex: number, onExit: () => void }) {
+type PlayerState = {
+  x: number;
+  y: number;
+  nickname: string;
+  roomIndex: number | null;
+};
+
+type RoomScreenProps = {
+  onExit: () => void;
+  myId: string | null;
+  roomId: string;
+  allPlayers: { [id: string]: PlayerState };
+  roomIndex: number;
+  isChattingRef: React.RefObject<boolean>;
+};
+
+const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, allPlayers, roomIndex, isChattingRef }, ref) => {
   const phaserRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
+  const allPlayersRef = useRef(allPlayers);
+  allPlayersRef.current = allPlayers;
+
   useEffect(() => {
+    const socket = getSocket();
     class RoomScene extends Phaser.Scene {
-      // Constants for room dimensions and player/door
-      static ROOM_W = 600;
-      static ROOM_H = 400;
-      static DOOR_W = 60;
-      static DOOR_H = 20;
-      static PLAYER_RADIUS = 16;
-      static DOOR_INTERACT_DIST = 40;
+      playerSprites: { [id: string]: Phaser.GameObjects.Arc } = {};
+      nameTexts: { [id: string]: Phaser.GameObjects.Text } = {};
       cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-      fKey!: Phaser.Input.Keyboard.Key;
-      player!: Phaser.GameObjects.Arc;
-      door!: Phaser.GameObjects.Rectangle;
-      hintText!: Phaser.GameObjects.Text;
-      playerX: number = 0;
-      playerY: number = 0;
-      doorOpen: boolean = true;
+      interactKey!: Phaser.Input.Keyboard.Key;
+      graphics!: Phaser.GameObjects.Graphics;
+
       create() {
-        const centerX = this.cameras.main.centerX;
-        const centerY = this.cameras.main.centerY;
-        this.add.rectangle(centerX, centerY, RoomScene.ROOM_W, RoomScene.ROOM_H, 0x222222).setStrokeStyle(6, 0xffffff);
-        this.door = this.add.rectangle(centerX, centerY - RoomScene.ROOM_H/2 + RoomScene.DOOR_H/2, RoomScene.DOOR_W, RoomScene.DOOR_H, 0x00bfff);
-        this.door.setStrokeStyle(3, 0xffffff);
-        this.player = this.add.circle(centerX, centerY, RoomScene.PLAYER_RADIUS, 0xff2a7f);
-        this.player.setStrokeStyle(3, 0xffffff);
-        this.hintText = this.add.text(centerX, centerY - RoomScene.ROOM_H/2 - 30, '', {
-          fontSize: '28px', color: '#fff', fontFamily: 'Arial', stroke: '#000', strokeThickness: 4,
-        }).setOrigin(0.5, 0.5);
-        this.cursors = this.input.keyboard.createCursorKeys();
-        this.fKey = this.input.keyboard.addKey('F');
-        this.input.keyboard.enabled = true;
-        this.input.keyboard.on('keydown', (event: KeyboardEvent) => {
-          console.log('keydown event in Phaser:', event.key);
+        this.cameras.main.setBackgroundColor('#333333');
+        this.cursors = this.input.keyboard!.createCursorKeys();
+        this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+        this.graphics = this.add.graphics();
+        
+        this.add.text(this.cameras.main.width / 2, 50, `Room ${roomIndex + 1}`, { fontSize: '32px' }).setOrigin(0.5);
+        this.add.text(this.cameras.main.width / 2, this.cameras.main.height - 50, `Press 'E' near the door to exit`, { fontSize: '24px' }).setOrigin(0.5);
+      }
+      
+      update(time: number, delta: number) {
+        const dt = delta / 1000;
+        const centerX = this.cameras.main.width / 2;
+        const centerY = this.cameras.main.height / 2;
+        
+        const myRoomPlayer = allPlayersRef.current[myId!];
+        
+        // Input handling
+        if (myRoomPlayer && myRoomPlayer.roomIndex === roomIndex) {
+          // Exit interaction
+          if (Phaser.Input.Keyboard.JustDown(this.interactKey) && !isChattingRef.current) {
+            const dist = Phaser.Math.Distance.Between(myRoomPlayer.x, myRoomPlayer.y, 0, 0); // Door is at center
+            if (dist < DOOR_INTERACT_DIST) {
+              onExit();
+              return; // Exit to avoid movement on the same frame
+            }
+          }
+
+          // Movement
+          if (!isChattingRef.current) {
+            let dx = 0, dy = 0;
+            if (this.cursors.left.isDown) dx -= 1;
+            if (this.cursors.right.isDown) dx += 1;
+            if (this.cursors.up.isDown) dy -= 1;
+            if (this.cursors.down.isDown) dy += 1;
+
+            if (dx !== 0 || dy !== 0) {
+              const len = Math.sqrt(dx * dx + dy * dy);
+              const newX = myRoomPlayer.x + (dx/len) * PLAYER_MOVE_SPEED * dt;
+              const newY = myRoomPlayer.y + (dy/len) * PLAYER_MOVE_SPEED * dt;
+              socket.emit('game2Input', { roomId, input: { x: newX, y: newY } });
+            }
+          }
+        }
+        
+        // Rendering
+        this.graphics.clear();
+        
+        // Draw center door
+        this.graphics.fillStyle(0x0000ff, 1);
+        this.graphics.fillRect(centerX - DOOR_WIDTH / 2, centerY - DOOR_HEIGHT / 2, DOOR_WIDTH, DOOR_HEIGHT);
+
+        const roomPlayers = Object.entries(allPlayersRef.current).filter(([_, p]) => p.roomIndex === roomIndex);
+
+        roomPlayers.forEach(([id, info]) => {
+          if (!this.playerSprites[id]) {
+            this.playerSprites[id] = this.add.circle(0, 0, PLAYER_RADIUS, id === myId ? 0xff2a7f : 0x00bfff);
+            this.nameTexts[id] = this.add.text(0, 0, info.nickname, { fontSize: '16px', color: '#fff' }).setOrigin(0.5);
+          }
+          this.playerSprites[id].setPosition(centerX + info.x, centerY + info.y);
+          this.nameTexts[id].setPosition(centerX + info.x, centerY + info.y - PLAYER_RADIUS - 10);
+        });
+
+        Object.keys(this.playerSprites).forEach(id => {
+          if (!roomPlayers.some(([pId]) => pId === id)) {
+            this.playerSprites[id].destroy();
+            this.nameTexts[id].destroy();
+            delete this.playerSprites[id];
+            delete this.nameTexts[id];
+          }
         });
       }
-      update() {
-        const centerX = this.cameras.main.centerX;
-        const centerY = this.cameras.main.centerY;
-        let dx = 0, dy = 0;
-        if (this.cursors.left?.isDown) dx -= 1;
-        if (this.cursors.right?.isDown) dx += 1;
-        if (this.cursors.up?.isDown) dy -= 1;
-        if (this.cursors.down?.isDown) dy += 1;
-        if (dx !== 0 || dy !== 0) {
-          const len = Math.sqrt(dx*dx + dy*dy);
-          dx /= len; dy /= len;
-          this.playerX += dx * 4;
-          this.playerY += dy * 4;
-        }
-        this.playerX = Phaser.Math.Clamp(this.playerX, -RoomScene.ROOM_W/2 + RoomScene.PLAYER_RADIUS, RoomScene.ROOM_W/2 - RoomScene.PLAYER_RADIUS);
-        this.playerY = Phaser.Math.Clamp(this.playerY, -RoomScene.ROOM_H/2 + RoomScene.PLAYER_RADIUS, RoomScene.ROOM_H/2 - RoomScene.PLAYER_RADIUS);
-        if (this.player) this.player.setPosition(centerX + this.playerX, centerY + this.playerY);
-        if (this.door) this.door.setFillStyle(this.doorOpen ? 0x00bfff : 0xff2a2a);
-        const dist = Phaser.Math.Distance.Between(centerX + this.playerX, centerY + this.playerY, centerX, centerY - RoomScene.ROOM_H/2 + RoomScene.DOOR_H/2);
-        let hint = '';
-        if (dist < RoomScene.DOOR_INTERACT_DIST) {
-          if (this.doorOpen) {
-            hint = 'F: 나가기 | F: 문 닫기';
-            if (Phaser.Input.Keyboard.JustDown(this.fKey)) {
-              onExit();
-            }
-          } else {
-            hint = 'F: 문 열기';
-          }
-          if (Phaser.Input.Keyboard.JustDown(this.fKey)) {
-            this.doorOpen = !this.doorOpen;
-          }
-        }
-        if (this.hintText) {
-          this.hintText.setText(hint);
-          this.hintText.setVisible(hint.length > 0);
+    }
+    const config = {
+      type: Phaser.AUTO,
+      width: window.innerWidth,
+      height: window.innerHeight,
+      parent: phaserRef.current!,
+      scene: RoomScene
+    };
+    gameRef.current = new Phaser.Game(config);
+    return () => gameRef.current?.destroy(true);
+  }, [roomIndex, onExit, myId, roomId, allPlayers, isChattingRef]);
+
+  return <div ref={phaserRef} />;
+});
+
+
+const GameScreen = () => {
+  const location = useLocation();
+  const { roomId, playerNickname } = location.state || {};
+  const [allPlayers, setAllPlayers] = useState<{ [id: string]: PlayerState }>({});
+  const allPlayersRef = useRef(allPlayers);
+  useEffect(() => {
+    allPlayersRef.current = allPlayers;
+  }, [allPlayers]);
+  const myIdRef = useRef<string | null>(null);
+
+  const [phase, setPhase] = useState('waiting');
+  const [timer, setTimer] = useState(3);
+  const phaseRef = useRef(phase);
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+  
+  const [mainTimer, setMainTimer] = useState(20);
+  const [gameResult, setGameResult] = useState<'survived' | 'died' | null>(null);
+  const [isChatting, setIsChatting] = useState(false);
+  const isChattingRef = useRef(isChatting);
+  useEffect(() => {
+    isChattingRef.current = isChatting;
+  }, [isChatting]);
+
+  const [doorQuotas, setDoorQuotas] = useState<number[]>([]);
+  const doorQuotasRef = useRef(doorQuotas);
+  useEffect(() => {
+    doorQuotasRef.current = doorQuotas;
+  }, [doorQuotas]);
+
+  const [doorRotation, setDoorRotation] = useState(0);
+  const doorRotationRef = useRef(doorRotation);
+  useEffect(() => {
+    doorRotationRef.current = doorRotation;
+  }, [doorRotation]);
+
+  const [roomIndex, setRoomIndex] = useState<number | null>(null);
+
+  const handleEnterRoom = useCallback((index: number) => {
+    const socket = getSocket();
+    socket.emit('enterRoom', { roomId, roomIndex: index });
+    setRoomIndex(index);
+  }, [roomId]);
+
+  const handleExitRoom = useCallback(() => {
+    const socket = getSocket();
+    socket.emit('exitRoom', { roomId });
+    setRoomIndex(null);
+  }, [roomId]);
+  
+  const phaserRef = useRef<HTMLDivElement>(null);
+  const gameRef = useRef<Phaser.Game | null>(null);
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+    if (!myIdRef.current && socket.id) myIdRef.current = socket.id;
+
+    const onGame2State = (data: { players: { [id: string]: PlayerState }, doorQuotas?: number[], doorRotation?: number, remainingTime?: number }) => {
+      setAllPlayers(data.players);
+      if (data.doorQuotas) {
+        setDoorQuotas(data.doorQuotas);
+      }
+      if (data.doorRotation !== undefined) {
+        setDoorRotation(data.doorRotation);
+      }
+      if (data.remainingTime !== undefined) {
+        setMainTimer(data.remainingTime);
+      }
+      const myState = data.players[myIdRef.current!];
+      if (myState && myState.roomIndex !== roomIndex) {
+        setRoomIndex(myState.roomIndex);
+      }
+    };
+    const onGameEnd = ({ result }: { result: 'survived' | 'died' }) => {
+      setGameResult(result);
+      if (result === 'died') {
+        setTimeout(() => {
+          getSocket().disconnect();
+          window.location.href = '/';
+        }, 1500);
+      }
+    };
+
+    socket.on('game2State', onGame2State);
+    socket.on('game2End', onGameEnd);
+    return () => {
+      socket.off('game2State', onGame2State);
+      socket.off('game2End', onGameEnd);
+    };
+  }, [roomId, roomIndex]);
+
+  useEffect(() => {
+    if (phase === 'waiting') {
+      const countdown = setTimeout(() => setPhase('playing'), 3000);
+      const timerInterval = setInterval(() => setTimer(t => Math.max(0, t - 1)), 1000);
+      return () => {
+        clearTimeout(countdown);
+        clearInterval(timerInterval);
+      };
+    }
+  }, [phase]);
+  
+  const enterRoomRef = useRef(handleEnterRoom);
+  useEffect(() => { enterRoomRef.current = handleEnterRoom; }, [handleEnterRoom]);
+
+  useEffect(() => {
+    if (roomIndex !== null) {
+      if(gameRef.current) {
+        gameRef.current.destroy(true);
+        gameRef.current = null;
+      }
+      return;
+    }
+    if (!phaserRef.current || gameRef.current) return;
+
+    let playerSprites: { [id: string]: Phaser.GameObjects.Arc } = {};
+    let nameTexts: { [id: string]: Phaser.GameObjects.Text } = {};
+
+    class PairScene extends Phaser.Scene {
+      cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+      graphics!: Phaser.GameObjects.Graphics;
+      doorPositions: { x: number; y: number; angle: number }[] = [];
+      interactKey!: Phaser.Input.Keyboard.Key;
+      quotaTexts: Phaser.GameObjects.Text[] = [];
+      isChattingRef!: React.RefObject<boolean>;
+
+      init(data: { isChattingRef: React.RefObject<boolean> }) {
+        this.isChattingRef = data.isChattingRef;
+      }
+
+      create() {
+        this.cursors = this.input.keyboard!.createCursorKeys();
+        this.graphics = this.add.graphics();
+        this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+
+        for (let i = 0; i < DOOR_COUNT; i++) {
+          const angle = (i / DOOR_COUNT) * Math.PI * 2;
+          this.doorPositions.push({ x: 0, y: 0, angle });
+          this.quotaTexts.push(
+            this.add.text(0, 0, '', { fontSize: '18px', color: '#fff', align: 'center' }).setOrigin(0.5)
+          );
         }
       }
+
+      update(time: number, delta: number) {
+        const dt = delta / 1000;
+        const mainCam = this.cameras.main;
+        const centerX = mainCam.width / 2;
+        const centerY = mainCam.height / 2;
+
+        const myPlayer = allPlayersRef.current[myIdRef.current!];
+        if (myPlayer && myPlayer.roomIndex === null) {
+          if (!this.isChattingRef.current) {
+              let dx = 0, dy = 0;
+              if (this.cursors.left.isDown) dx -= 1;
+              if (this.cursors.right.isDown) dx += 1;
+              if (this.cursors.up.isDown) dy -= 1;
+              if (this.cursors.down.isDown) dy += 1;
+
+              if (dx !== 0 || dy !== 0) {
+                const len = Math.sqrt(dx * dx + dy * dy);
+                let newX = myPlayer.x + (dx / len) * PLAYER_MOVE_SPEED * dt;
+                let newY = myPlayer.y + (dy / len) * PLAYER_MOVE_SPEED * dt;
+
+                if (phaseRef.current === 'waiting') {
+                  const dist = Math.sqrt(newX * newX + newY * newY);
+                  const radiusLimit = CIRCLE_RADIUS - PLAYER_RADIUS;
+                  if (dist > radiusLimit) {
+                    const angle = Math.atan2(newY, newX);
+                    newX = Math.cos(angle) * radiusLimit;
+                    newY = Math.sin(angle) * radiusLimit;
+                  }
+                }
+                getSocket().emit('game2Input', { roomId, input: { x: newX, y: newY } });
+              }
+          }
+          
+          if (Phaser.Input.Keyboard.JustDown(this.interactKey) && !this.isChattingRef.current) {
+            this.doorPositions.forEach((pos, index) => {
+              const requiredQuota = doorQuotasRef.current[index] ?? 0;
+              if (requiredQuota > 0) {
+                const currentAngle = pos.angle + doorRotationRef.current;
+                const doorX = Math.cos(currentAngle) * DOOR_RADIUS;
+                const doorY = Math.sin(currentAngle) * DOOR_RADIUS;
+                const dist = Phaser.Math.Distance.Between(myPlayer.x, myPlayer.y, doorX, doorY);
+                if (dist < DOOR_INTERACT_DIST) {
+                  enterRoomRef.current(index);
+                }
+              }
+            });
+          }
+        }
+        
+        this.graphics.clear();
+        this.graphics.fillStyle(0x0000ff, 1);
+        this.doorPositions.forEach((pos, index) => {
+            const requiredQuota = doorQuotasRef.current[index] ?? 0;
+
+            if (requiredQuota > 0) {
+              const currentAngle = pos.angle + doorRotationRef.current;
+              const x = Math.cos(currentAngle) * DOOR_RADIUS;
+              const y = Math.sin(currentAngle) * DOOR_RADIUS;
+              this.graphics.fillRect(centerX + x - DOOR_WIDTH / 2, centerY + y - DOOR_HEIGHT / 2, DOOR_WIDTH, DOOR_HEIGHT);
+              
+              const currentPlayersInRoom = Object.values(allPlayersRef.current).filter(p => p.roomIndex === index).length;
+              const text = `${currentPlayersInRoom}/${requiredQuota}`;
+              this.quotaTexts[index].setText(text).setPosition(centerX + x, centerY + y - DOOR_HEIGHT / 2 - 15).setVisible(true);
+            } else {
+              this.quotaTexts[index].setVisible(false);
+            }
+        });
+
+        if (phaseRef.current === 'waiting') {
+          this.graphics.lineStyle(6, 0xffffff, 1);
+          this.graphics.strokeCircle(centerX, centerY, CIRCLE_RADIUS);
+        }
+        
+        const mainPlayers = Object.entries(allPlayersRef.current).filter(([_,p]) => p.roomIndex === null);
+
+        mainPlayers.forEach(([id, info]) => {
+          if (!playerSprites[id]) {
+            const isMe = id === myIdRef.current;
+            playerSprites[id] = this.add.circle(0, 0, PLAYER_RADIUS, isMe ? 0xff2a7f : 0x00bfff);
+            playerSprites[id].setStrokeStyle(3, 0xffffff);
+            nameTexts[id] = this.add.text(0, 0, info.nickname, { fontSize: '16px', color: '#fff' }).setOrigin(0.5);
+          }
+          playerSprites[id].setPosition(centerX + info.x, centerY + info.y);
+          nameTexts[id].setPosition(centerX + info.x, centerY + info.y - PLAYER_RADIUS - 10);
+        });
+
+        Object.keys(playerSprites).forEach(id => {
+          if (!mainPlayers.some(([pId]) => pId === id)) {
+            playerSprites[id].destroy();
+            nameTexts[id].destroy();
+            delete playerSprites[id];
+            delete nameTexts[id];
+          }
+        });
+      }
     }
-    if (phaserRef.current !== null) {
-      const config: Phaser.Types.Core.GameConfig = {
-        type: Phaser.AUTO,
-        width: window.innerWidth,
-        height: window.innerHeight,
-        parent: phaserRef.current,
-        backgroundColor: '#222',
-        scene: RoomScene,
-        scale: {
-          mode: Phaser.Scale.FIT,
-          autoCenter: Phaser.Scale.CENTER_BOTH,
-        },
-      };
-      gameRef.current = new Phaser.Game(config);
-      // 포커스 강제 부여
-      phaserRef.current.focus();
-    }
+
+    const config = { 
+        type: Phaser.AUTO, 
+        width: window.innerWidth, 
+        height: window.innerHeight, 
+        parent: phaserRef.current!, 
+        backgroundColor: '#000', 
+        scene: PairScene,
+        callbacks: {
+            postBoot: function (game: Phaser.Game) {
+                const scene = game.scene.scenes[0] as PairScene;
+                scene.init({ isChattingRef });
+            }
+        }
+    };
+    gameRef.current = new Phaser.Game(config);
+
     return () => {
-      if (gameRef.current !== null) {
+      if (gameRef.current) {
         gameRef.current.destroy(true);
         gameRef.current = null;
       }
     };
-  }, [roomIndex, onExit]);
-  return <div ref={phaserRef} tabIndex={0} style={{ width: '100vw', height: '100vh', outline: 'none' }} />;
-}
+  }, [roomIndex, isChattingRef]);
 
-const GameScreen = () => {
-  // phase: 'waiting'(3초) | 'entering'(5초) | 'room' | 'dead' | 'survived'
-  const [phase, setPhase] = useState<'waiting' | 'entering' | 'room' | 'dead' | 'survived'>('waiting')
-  const [timer, setTimer] = useState(WAIT_TIME)
-  const [roomIndex, setRoomIndex] = useState<number | null>(null)
-  const [restartKey, setRestartKey] = useState(0) // 재시작용
-
-  // 타이머 관리
   useEffect(() => {
-    if (["waiting", "entering", "room"].includes(phase)) {
-      let last = Date.now();
-      const id = setInterval(() => {
-        const now = Date.now();
-        const diff = (now - last) / 1000;
-        last = now;
-        setTimer(t => Math.max(0, t - diff));
-      }, 50);
-      return () => clearInterval(id);
+    if (gameRef.current && gameRef.current.input && gameRef.current.input.keyboard) {
+        gameRef.current.input.keyboard.enabled = !isChatting;
     }
-  }, [phase]);
+  }, [isChatting]);
 
-  // phase 전환
-  useEffect(() => {
-    if (phase === 'waiting' && timer <= 0) {
-      setPhase('entering')
-      setTimer(ENTER_TIME)
-    } else if (phase === 'room' && timer <= 0 && roomIndex !== null) {
-      setPhase('survived');
-    } else if (phase === 'entering' && timer <= 0 && roomIndex === null) {
-      setPhase('dead');
-    }
-    // phase === 'survived'일 때는 아무것도 하지 않음
-  }, [phase, timer, roomIndex])
-
-  // phase가 'survived'로 바뀌면 1.5초 후 자동 재시작
-  useEffect(() => {
-    if (phase === 'survived') {
-      setTimer(WAIT_TIME);
-      const id = setTimeout(() => {
-        setPhase('waiting');
-        setRoomIndex(null);
-        setRestartKey(k => k + 1);
-      }, 1500);
-      return () => clearTimeout(id);
-    }
-  }, [phase]);
-
-  // 방 입장/퇴장 시 phase를 변경
-  const handleEnterRoom = useCallback((idx: number) => {
-    setRoomIndex(idx);
-    setPhase('room');
-  }, []);
-  const handleExitRoom = useCallback(() => {
-    setRoomIndex(null);
-    setPhase('entering');
-  }, []);
-
-  // Phaser 외부 맵
-  const phaserRef = useRef<HTMLDivElement>(null)
-  const gameRef = useRef<Phaser.Game | null>(null)
-  const timerRef = useRef(timer)
-  useEffect(() => { timerRef.current = timer }, [timer])
-  useEffect(() => {
-    if (phase !== 'waiting' && phase !== 'entering') return;
-    if (phaserRef.current !== null && !gameRef.current) {
-      let playerX = 0
-      let playerY = 0
-      let circleRotation = 0
-      let cursors: Phaser.Types.Input.Keyboard.CursorKeys
-      let timerText: Phaser.GameObjects.Text
-      let doors: Phaser.GameObjects.Rectangle[] = []
-      let doorAngles: number[] = []
-      let doorCount = DOOR_COUNT
-      let doorsCreated = false
-      let enterableDoorIndices: number[] = []
-      let doorStates: boolean[] = []
-      let playerLocation: 'lobby' | number = 'lobby'
-      let interactHint: Phaser.GameObjects.Text | null = null
-      let lastPhase = phase;
-      class MainScene extends Phaser.Scene {
-        graphics!: Phaser.GameObjects.Graphics
-        player!: Phaser.GameObjects.Arc
-        cameraOffsetX: number = 0
-        cameraOffsetY: number = 0
-        create() {
-          const mainCam = this.cameras.main as Phaser.Cameras.Scene2D.Camera;
-          const centerX = mainCam.centerX;
-          const centerY = mainCam.centerY;
-          this.graphics = this.add.graphics()
-          this.player = this.add.circle(0, 0, PLAYER_RADIUS, 0xff2a7f)
-          this.player.setStrokeStyle(3, 0xffffff)
-          timerText = this.add.text(centerX, 40, '', {
-            fontSize: '32px', color: '#fff', fontFamily: 'Arial, sans-serif', fontStyle: 'bold', stroke: '#000', strokeThickness: 4, align: 'center',
-          }).setOrigin(0.5, 0.5)
-          cursors = this.input.keyboard.createCursorKeys()
-        }
-        update(time: number, delta: number) {
-          const dt = delta / 1000
-          // phase가 바뀌면 doorsCreated 등 리셋
-          if (phase !== lastPhase) {
-            if (phase === 'waiting') {
-              doorsCreated = false;
-            }
-            lastPhase = phase;
-          }
-          if (phase === 'waiting') {
-            circleRotation += ROTATION_SPEED * dt
-            const cosR = Math.cos(ROTATION_SPEED * dt)
-            const sinR = Math.sin(ROTATION_SPEED * dt)
-            const rotatedX = playerX * cosR - playerY * sinR
-            const rotatedY = playerX * sinR + playerY * cosR
-            playerX = rotatedX
-            playerY = rotatedY
-          }
-          let dx = 0, dy = 0
-          if (cursors.left?.isDown) dx -= 1
-          if (cursors.right?.isDown) dx += 1
-          if (cursors.up?.isDown) dy -= 1
-          if (cursors.down?.isDown) dy += 1
-          if (dx !== 0 || dy !== 0) {
-            const len = Math.sqrt(dx*dx + dy*dy)
-            dx /= len; dy /= len
-            playerX += dx * PLAYER_MOVE_SPEED * dt
-            playerY += dy * PLAYER_MOVE_SPEED * dt
-          }
-          if (phase === 'waiting') {
-            const dist = Math.sqrt(playerX*playerX + playerY*playerY)
-            if (dist > CIRCLE_RADIUS - PLAYER_RADIUS) {
-              const scale = (CIRCLE_RADIUS - PLAYER_RADIUS) / dist
-              playerX *= scale
-              playerY *= scale
-            }
-          }
-          const mainCam = this.cameras.main as Phaser.Cameras.Scene2D.Camera;
-          const centerX = mainCam.centerX;
-          const centerY = mainCam.centerY;
-          this.cameraOffsetX = playerX;
-          this.cameraOffsetY = playerY;
-          this.graphics.clear()
-          if (phase === 'waiting') {
-            this.graphics.lineStyle(6, 0xffffff, 1)
-            this.graphics.strokeCircle(centerX - this.cameraOffsetX, centerY - this.cameraOffsetY, CIRCLE_RADIUS)
-          }
-          if (phase === 'entering' && !doorsCreated) {
-            doorAngles = []
-            doors = []
-            // 파란 문의 개수 랜덤(1~9)
-            const blueDoorCount = Phaser.Math.Between(1, doorCount - 1)
-            enterableDoorIndices = Phaser.Utils.Array.Shuffle([...Array(doorCount).keys()]).slice(0, blueDoorCount)
-            doorStates = Array(doorCount).fill(false)
-            for (let i = 0; i < enterableDoorIndices.length; ++i) doorStates[enterableDoorIndices[i]] = true
-            playerLocation = 'lobby'
-            interactHint = null
-            for (let i = 0; i < doorCount; ++i) {
-              const theta = (i / doorCount) * Math.PI * 2
-              doorAngles.push(theta)
-              const color = doorStates[i] ? 0x00bfff : 0xff2a2a
-              const door = this.add.rectangle(0, 0, DOOR_WIDTH, DOOR_HEIGHT, color)
-              door.setStrokeStyle(3, 0xffffff)
-              doors.push(door)
-            }
-            doorsCreated = true
-          }
-          if (doorsCreated) {
-            for (let i = 0; i < doors.length; ++i) {
-              const theta = doorAngles[i] + circleRotation
-              const doorX = Math.cos(theta) * DOOR_RADIUS
-              const doorY = Math.sin(theta) * DOOR_RADIUS
-              doors[i].setPosition(centerX - this.cameraOffsetX + doorX, centerY - this.cameraOffsetY + doorY)
-              doors[i].setRotation(theta + Math.PI / 2)
-              const color = doorStates[i] ? 0x00bfff : 0xff2a2a
-              doors[i].setFillStyle(color)
-            }
-          }
-          if (doorsCreated) {
-            if (!interactHint) {
-              interactHint = this.add.text(centerX, centerY - 80, '', {
-                fontSize: '28px', color: '#fff', fontFamily: 'Arial', stroke: '#000', strokeThickness: 4,
-              }).setOrigin(0.5, 0.5).setDepth(10)
-            }
-            interactHint.setVisible(false)
-            if (playerLocation === 'lobby') {
-              let nearDoorIdx = -1
-              let minDist = 99999
-              for (let i = 0; i < doors.length; ++i) {
-                const doorPos = doors[i].getCenter()
-                const dist = Phaser.Math.Distance.Between(centerX, centerY, doorPos.x, doorPos.y)
-                if (dist < DOOR_INTERACT_DIST && doorStates[i]) {
-                  if (dist < minDist) {
-                    minDist = dist
-                    nearDoorIdx = i
-                  }
-                }
-              }
-              if (nearDoorIdx !== -1 && phase === 'entering') {
-                interactHint.setText('F: 방 입장')
-                interactHint.setVisible(true)
-                if (Phaser.Input.Keyboard.JustDown(cursors.space) || this.input.keyboard.checkDown(this.input.keyboard.addKey('F'), 0)) {
-                  // setRoomIndex(nearDoorIdx)
-                  handleEnterRoom(nearDoorIdx)
-                }
-              }
-            }
-            interactHint.setPosition(centerX, centerY - 80)
-          }
-          this.player.setPosition(centerX, centerY)
-          timerText.setPosition(centerX, 40)
-          timerText.setVisible(false)
-        }
-      }
-      const config: Phaser.Types.Core.GameConfig = {
-        type: Phaser.AUTO,
-        width: window.innerWidth,
-        height: window.innerHeight,
-        parent: phaserRef.current!,
-        backgroundColor: '#000',
-        scene: MainScene,
-        scale: {
-          mode: Phaser.Scale.FIT,
-          autoCenter: Phaser.Scale.CENTER_BOTH,
-        },
-      }
-      gameRef.current = new Phaser.Game(config)
-    }
-    return () => {
-      if (gameRef.current !== null) {
-        gameRef.current.destroy(true)
-        gameRef.current = null
-      }
-    }
-  }, [phase, restartKey])
-
-  if (phase === 'dead') {
+  if (gameResult) {
     return (
       <div style={{
         width: '100vw', height: '100vh', background: '#111', color: '#fff',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 40
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 60, fontWeight: 'bold'
       }}>
-        <div style={{ marginBottom: 32 }}>죽었습니다</div>
-        <button style={{ fontSize: 28, padding: '16px 40px', borderRadius: 12 }}
-          onClick={() => { setPhase('waiting'); setTimer(WAIT_TIME); setRoomIndex(null); setRestartKey(k => k + 1); }}>
-          다시 시작
-        </button>
-      </div>
-    );
-  }
-
-  if (phase === 'survived') {
-    return (
-      <div style={{
-        width: '100vw', height: '100vh', background: '#111', color: '#fff',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 40
-      }}>
-        <div style={{ marginBottom: 32 }}>생존!</div>
+        {gameResult === 'survived' ? '생존!' : '사망'}
       </div>
     );
   }
 
   return (
-    <>
-      {/* 항상 상단에 보이되, 3초 이하일 때만 크게 */}
-      <div style={{
-        position: 'fixed', top: 32, left: '50%', transform: 'translateX(-50%)',
-        fontSize: timer <= 3 ? 100 : 32, color: '#fff', fontWeight: 'bold', zIndex: 1000,
-        textShadow: '0 0 32px #000, 0 0 8px #000',
-        pointerEvents: 'none',
-        transition: 'font-size 0.2s cubic-bezier(0.4,1.4,0.6,1)',
-      }}>
-        {timer > 0 ? timer.toFixed(2) : '0.00'}
-      </div>
-      {phase === 'room' && roomIndex !== null
-        ? <RoomScreen roomIndex={roomIndex} onExit={handleExitRoom} />
-        : <div ref={phaserRef} style={{ width: '100vw', height: '100vh', position: 'relative', zIndex: 1 }} />
-      }
-    </>
-  )
-}
+    <div style={{ width: '100vw', height: '100vh', cursor: 'default' }}>
+      {/* Timer */}
+      {(phase === 'waiting' || phase === 'playing') && (
+        <div style={{
+            position: 'fixed', top: 32, left: '50%', transform: 'translateX(-50%)',
+            fontSize: phase === 'waiting' && timer > 0 ? 100 : 48, 
+            color: '#fff', 
+            fontWeight: 'bold', 
+            zIndex: 1000,
+            transition: 'font-size 0.3s ease-out'
+        }}>
+            {phase === 'waiting' && timer > 0 ? timer : mainTimer.toFixed(2)}
+        </div>
+      )}
+      
+      {/* ChatBox */}
+      {roomId && (
+        <ChatBox 
+          roomId={roomId} 
+          playerNickname={playerNickname || '익명'}
+          onFocus={() => setIsChatting(true)}
+          onBlur={() => setIsChatting(false)}
+        />
+      )}
 
-export default GameScreen 
+      {/* Game Canvas */}
+      {roomIndex === null ? 
+        <div ref={phaserRef} /> : 
+        <RoomScreen 
+          roomIndex={roomIndex} 
+          onExit={handleExitRoom} 
+          myId={myIdRef.current} 
+          roomId={roomId}
+          allPlayers={allPlayers}
+          isChattingRef={isChattingRef}
+        />
+      }
+    </div>
+  );
+};
+
+export default GameScreen; 

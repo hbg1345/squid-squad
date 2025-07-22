@@ -4,6 +4,8 @@ import { getSocket } from '../socket';
 interface ChatBoxProps {
   roomId: string;
   playerNickname: string;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
 interface ChatMessage {
@@ -12,7 +14,7 @@ interface ChatMessage {
   time: number;
 }
 
-const ChatBox: React.FC<ChatBoxProps> = ({ roomId, playerNickname }) => {
+const ChatBox: React.FC<ChatBoxProps> = ({ roomId, playerNickname, onFocus, onBlur }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [visible, setVisible] = useState(true);
@@ -92,6 +94,8 @@ const ChatBox: React.FC<ChatBoxProps> = ({ roomId, playerNickname }) => {
         value={input}
         onChange={e => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
+        onFocus={onFocus}
+        onBlur={onBlur}
         placeholder="채팅 입력 (Enter)"
         style={{
           width: '100%',
