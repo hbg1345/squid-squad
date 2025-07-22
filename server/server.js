@@ -23,14 +23,18 @@ function randomToken() {
   return token;
 }
 
-function spawnTokensIfNeeded() {
-  while (tokens.length < MAX_TOKENS) {
-    tokens.push(randomToken());
+function spawnTokensIfNeeded(roomId) {
+  const room = rooms[roomId];
+  if (!room) return;
+  while (room.tokens.length < MAX_TOKENS_PER_ROOM) {
+      room.tokens.push(randomToken());
   }
 }
 
-function broadcastTokens() {
-  io.emit('tokensUpdate', tokens);
+function broadcastYounghee(roomId) {
+  const room = rooms[roomId];
+  if (!room) return;
+  io.to(roomId).emit('youngheeUpdate', room.younghee);
 }
 
 function randomizeYoungheePosition(roomId) {
@@ -157,6 +161,40 @@ io.on('connection', (socket) => {
     delete playerInputs[socket.id];
     broadcastGameState();
   });
+
+  socket.on('playerPush', ({ id, dx, dy }) => {
+    // 1. 현재 소켓이 속한 방 ID를 찾습니다.
+    // (socket.rooms는 Set이라서, 자기 자신의 ID를 제외한 첫 번째 방을 찾습니다.)
+    const roomId = Array.from(socket.rooms).find(r => r !== socket.id);
+    if (!roomId) {
+        console.log(`[ERROR] playerPush: room not found for socket ${socket.id}`);
+        return;
+    }
+
+    const room = rooms[roomId];
+    if (!room) {
+        console.log(`[ERROR] playerPush: room object not found for room ID ${roomId}`);
+        return;
+    }
+
+    // 2. 해당 방에서 밀쳐질 플레이어를 찾습니다.
+    if (room.players[id]) {
+        const PUSH_DIST = 100;
+        room.players[id].x += dx * PUSH_DIST;
+        room.players[id].y += dy * PUSH_DIST;
+
+        // 3. 해당 방의 모든 클라이언트에게 브로드캐스트합니다.
+        console.log(`[SUCCESS] Pushing player ${id} in room ${roomId}`);
+        io.to(roomId).emit('playerPushed', {
+            id: id,
+            x: room.players[id].x,
+            y: room.players[id].y
+        });
+    } else {
+        console.log(`[ERROR] playerPush: player ${id} not found in room ${roomId}`);
+    }
+});
+  
 });
 
 // 60fps 기준으로 위치 계산 및 broadcast (방별로)
@@ -165,6 +203,7 @@ setInterval(() => {
     for (const id in room.players) {
       const input = room.playerInputs[id] || {};
       let dx = 0, dy = 0;
+      const PLAYER_SPEED = 500 / 60; // 500px/sec, 60fps 기준 프레임당 이동량
       if (input.left) dx -= PLAYER_SPEED;
       if (input.right) dx += PLAYER_SPEED;
       if (input.up) dy -= PLAYER_SPEED;

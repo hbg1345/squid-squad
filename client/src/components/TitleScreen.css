@@ -76,3 +76,15 @@
       bottom: 30px;
   }
 }
+
+.nickname-input {
+  position: absolute;
+  top: 30%; /* 원하는 위치로 조정 */
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px;
+  font-size: 1.2rem;
+  width: 300px;
+  text-align: center;
+  z-index: 10; /* Phaser 캔버스 위에 보이도록 */
+}
