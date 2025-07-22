@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { getSocket } from '../socket';
 import ChatBox from './ChatBox';
 import GameDescriptionModal from './GameDescriptionModal';
+import useAudio from '../hooks/useAudio';
 
 const PLAYER_RADIUS = 16;
 const PLAYER_MOVE_SPEED = 180;
@@ -139,6 +140,15 @@ const GameScreen = () => {
   const { roomId, playerNickname } = location.state || {};
   const [allPlayers, setAllPlayers] = useState<{ [id: string]: PlayerState }>({});
   const allPlayersRef = useRef(allPlayers);
+  const { play, pause } = useAudio('/pairSong.mp3');
+
+  useEffect(() => {
+    play();
+    return () => {
+      pause();
+    };
+  }, [play, pause]);
+
   useEffect(() => {
     allPlayersRef.current = allPlayers;
   }, [allPlayers]);
@@ -439,7 +449,7 @@ const GameScreen = () => {
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         boxSizing: 'border-box', padding: '50px'
       }}>
-        <h1 style={{ fontSize: '48px', marginBottom: '40px', color: gameResult === 'survived' ? '#4CAF50' : '#F44336' }}>
+        <h1 style={{ fontSize: '48px', marginBottom: '40px', color: gameResult === 'survived' ? '#ff2a7f' : '#249f9c' }}>
           {gameResult === 'survived' ? '생존' : '사망'}
         </h1>
         {survivors.length > 0 && (
@@ -466,7 +476,7 @@ const GameScreen = () => {
             padding: '15px 35px',
             fontSize: '20px',
             cursor: 'pointer',
-            backgroundColor: '#f44336',
+            backgroundColor: '#ff2a7f',
             color: 'white',
             border: 'none',
             borderRadius: '8px',

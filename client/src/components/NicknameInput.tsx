@@ -4,6 +4,7 @@ import { getSocket } from '../socket';
 import { MATCH_SIZE } from '../constants/game';
 import MatchingModal from '../MatchingModal';
 import CharacterSelectionModal from './CharacterSelectionModal';
+import useAudio from '../hooks/useAudio'; // useAudio 훅 가져오기
 import './NicknameInput.css';
 
 const NicknameInput: React.FC = () => {
@@ -13,8 +14,17 @@ const NicknameInput: React.FC = () => {
     const [matchingTotal] = useState(MATCH_SIZE);
     const [elapsed, setElapsed] = useState(0);
     const [showCharacterModal, setShowCharacterModal] = useState(false);
+    const [isContractSubmitted, setIsContractSubmitted] = useState(false); // 애니메이션 상태 추가
     const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
     const navigate = useNavigate();
+    const { play, pause } = useAudio('/Squid-Game-Pink-Soldiers.mp3');
+
+    useEffect(() => {
+        play(); // 페이지가 열릴 때 음악 재생
+        return () => {
+            pause(); // 페이지를 떠날 때 음악 정지
+        };
+    }, [play, pause]);
 
     useEffect(() => {
         if (showMatchingModal) {
@@ -41,7 +51,14 @@ const NicknameInput: React.FC = () => {
     }, [navigate, nickname, selectedCharacter]);
 
     const handleStartMatching = () => {
-        setShowCharacterModal(true);
+        if (!nickname.trim()) return;
+        setIsContractSubmitted(true); // 1. 서약서 사라지는 애니메이션 시작
+
+        // 2. 모달이 뜨는 시간을 조절하는 부분입니다. (1000 = 1초)
+        // 여기서 숫자를 늘리면 모달이 더 늦게 나타납니다.
+        setTimeout(() => {
+            setShowCharacterModal(true);
+        }, 800);
     };
 
     const handleCancelMatching = () => {
@@ -56,7 +73,7 @@ const NicknameInput: React.FC = () => {
 
     return (
         <div className="nickname-container">
-            <div className="content-wrapper">
+            <div className={`content-wrapper ${isContractSubmitted ? 'submitted' : ''}`}>
                 <img src="/contract.png" alt="Game Contract" className="contract-image" />
                 <input
                     type="text"
@@ -65,18 +82,13 @@ const NicknameInput: React.FC = () => {
                     placeholder=""
                     maxLength={10}
                     className={`nickname-input-field ${nickname ? 'has-text' : ''}`}
-                    style={{
-                        fontSize: nickname.length >= 5 ? '1rem' : '2rem',
-                        top: nickname.length >= 5 ? '732px' : '725px' // 글자 수에 따라 top 위치 조정
-                    }}
-                    //5자 이상이면 1rem, 아니면 2rem으로 고정  
                 />
                 <button
                     onClick={handleStartMatching}
                     disabled={!nickname.trim()}
                     className="start-matching-button"
                 >
-                    게임 시작
+                    서약서 제출
                 </button>
             </div>
             <CharacterSelectionModal
