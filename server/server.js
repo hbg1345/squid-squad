@@ -133,7 +133,7 @@ io.on('connection', (socket) => {
       if (waitingPlayers.length >= MATCH_SIZE) {
         const matched = waitingPlayers.splice(0, MATCH_SIZE);
         const roomId = `room${roomSeq++}`;
-        rooms[roomId] = { players: {}, tokens: [], created: Date.now(), younghee: { x: 360, y: 180 } };
+        rooms[roomId] = { players: {}, tokens: [], created: Date.now(), younghee: { x: 360, y: 180 }, gameType: 'redlight' };
         matched.forEach(s => {
           s.join(roomId);
           s.emit('matchFound', { roomId });
@@ -208,6 +208,17 @@ io.on('connection', (socket) => {
     if (allSurvived) {
       const playerList = Object.entries(room.players).map(([id, info]) => ({ id, nickname: info.nickname }));
       console.log(`[phaseChange] roomId=${roomId}, players:`, Object.keys(room.players), 'playerList:', playerList);
+      
+      // 게임 2를 위해 플레이어 위치 초기화
+      Object.values(room.players).forEach(player => {
+        player.x = 0;
+        player.y = 0;
+        delete player.survived; // 상태 플래그 정리
+      });
+
+      // 게임 타입을 'pair'로 변경
+      room.gameType = 'pair';
+      console.log(`[gameTypeChange] roomId=${roomId} changed to 'pair'`);
       Object.keys(room.players).forEach(id => {
         io.to(id).emit('phaseChange', { phase: 'pair', players: playerList });
       });
@@ -227,21 +238,26 @@ io.on('connection', (socket) => {
 // 60fps 기준으로 위치 계산 및 broadcast (방별로)
 setInterval(() => {
   Object.entries(rooms).forEach(([roomId, room]) => {
-    // 기존 게임1 위치 계산 및 broadcast
-    for (const id in room.players) {
-      const input = room.playerInputs ? (room.playerInputs[id] || {}) : {};
-      let dx = 0, dy = 0;
-      const PLAYER_SPEED = 500 / 60; // 500px/sec, 60fps 기준 프레임당 이동량
-      if (input.left) dx -= PLAYER_SPEED;
-      if (input.right) dx += PLAYER_SPEED;
-      if (input.up) dy -= PLAYER_SPEED;
-      if (input.down) dy += PLAYER_SPEED;
-      room.players[id].x = Math.max(20, Math.min(1920 - 20, room.players[id].x + dx));
-      room.players[id].y = Math.max(20, Math.min(1080 - 20, room.players[id].y + dy));
+    if (room.gameType === 'redlight') {
+      // 기존 게임1 위치 계산 및 broadcast
+      for (const id in room.players) {
+        const input = room.playerInputs ? (room.playerInputs[id] || {}) : {};
+        let dx = 0, dy = 0;
+        const PLAYER_SPEED = 500 / 60;
+        if (input.left) dx -= PLAYER_SPEED;
+        if (input.right) dx += PLAYER_SPEED;
+        if (input.up) dy -= PLAYER_SPEED;
+        if (input.down) dy += PLAYER_SPEED;
+        if (room.players[id] && (dx !== 0 || dy !== 0)) { // 입력이 있을 때만 위치 변경
+          room.players[id].x = Math.max(20, Math.min(1920 - 20, room.players[id].x + dx));
+          room.players[id].y = Math.max(20, Math.min(1080 - 20, room.players[id].y + dy));
+        }
+      }
+      broadcastGameState(roomId);
+    } else if (room.gameType === 'pair') {
+      // 게임2용 실시간 동기화만 (위치 계산 제거)
+      io.to(roomId).emit('game2State', { players: room.players });
     }
-    broadcastGameState(roomId);
-    // 게임2용 실시간 동기화 (game2State)
-    io.to(roomId).emit('game2State', { players: room.players });
   });
 }, 1000/60);
 
