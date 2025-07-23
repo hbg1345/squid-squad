@@ -64,7 +64,14 @@ function scheduleYoungheeMove() {
   setTimeout(() => {
     Object.keys(rooms).forEach(roomId => {
       randomizeYoungheePosition(roomId);
-      broadcastYounghee(roomId);
+      // youngheeUpdate에 nextDelay(ms)도 같이 보냄
+      const room = rooms[roomId];
+      if (!room) return;
+      io.to(roomId).emit('youngheeUpdate', {
+        x: room.younghee.x,
+        y: room.younghee.y,
+        nextDelay: delay
+      });
     });
     scheduleYoungheeMove(); // 재귀 호출로 반복
   }, delay);

@@ -478,6 +478,8 @@ type RedLightGreenLightGameProps = {
     roomId?: string;
 };
 
+const AUDIO_SRC = '/red_green_light.mp3';
+
 const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBack, playerNickname, roomId }) => {
     const gameRef = useRef<HTMLDivElement>(null);
     const gameInstance = useRef<Phaser.Game | null>(null);
@@ -494,6 +496,10 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     const [isChatting, setIsChatting] = useState(false);
     const [isDescribing, setIsDescribing] = useState(true);
     const [isGameStarted, setIsGameStarted] = useState(false);
+
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const lastYoungheeUpdateRef = useRef<number | null>(null);
+    const [_, forceRerender] = useState(0); // 오디오 ref 갱신용
 
     // 모달 표시 및 준비 완료 신호 전송
     useEffect(() => {
@@ -680,6 +686,44 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
         };
     }, [playerNickname, roomId, selectedCharacter]); 
 
+    useEffect(() => {
+        const socket = getSocket();
+        let audioTimeout: number | null = null;
+        function onYoungheeUpdate(data: { x: number, y: number, nextDelay?: number }) {
+            const interval = data.nextDelay ?? 3000; // ms
+            const audio = audioRef.current;
+            if (audio) {
+                audio.pause();
+                audio.currentTime = 0;
+                const playWithRate = () => {
+                    if (audio.duration && !isNaN(audio.duration)) {
+                        const playbackRate = audio.duration > 0 ? audio.duration / (interval / 1000) : 1;
+                        audio.playbackRate = playbackRate;
+                    } else {
+                        audio.playbackRate = 1;
+                    }
+                    audio.play();
+                    // mp3가 끝나면 자동으로 멈추도록 타임아웃 설정 (혹시라도 중간에 끊기는 것 방지)
+                    if (audioTimeout) window.clearTimeout(audioTimeout);
+                    audioTimeout = window.setTimeout(() => {
+                        audio.pause();
+                        audio.currentTime = 0;
+                    }, interval);
+                };
+                if (audio.readyState >= 1) {
+                    playWithRate();
+                } else {
+                    audio.onloadedmetadata = playWithRate;
+                }
+            }
+        }
+        socket.on('youngheeUpdate', onYoungheeUpdate);
+        return () => {
+            socket.off('youngheeUpdate', onYoungheeUpdate);
+            if (audioTimeout) window.clearTimeout(audioTimeout);
+        };
+    }, []);
+
     const handleGoBack = () => {
         onGoBack();
     };
@@ -762,6 +806,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
                     타이틀로 돌아가기
                 </button>
             </div>
+            <audio ref={audioRef} src={AUDIO_SRC} preload="auto" />
         </div>
     );
 };
