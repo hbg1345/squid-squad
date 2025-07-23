@@ -481,7 +481,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             if (roomId) {
                 getSocket().emit('clientReady', { roomId });
             }
-        }, 10000);
+        }, 5000);
         return () => clearTimeout(timer);
     }, [roomId]);
 
