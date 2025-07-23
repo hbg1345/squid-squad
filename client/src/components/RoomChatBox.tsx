@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { getSocket } from '../socket';
 
-interface ChatBoxProps {
+interface RoomChatBoxProps {
   roomId: string;
+  roomIndex: number;
   playerNickname: string;
-  roomIndex?: number | null;
   onFocus?: () => void;
   onBlur?: () => void;
 }
@@ -15,7 +15,7 @@ interface ChatMessage {
   time: number;
 }
 
-const ChatBox: React.FC<ChatBoxProps> = ({ roomId, playerNickname, roomIndex = null, onFocus, onBlur }) => {
+const RoomChatBox: React.FC<RoomChatBoxProps> = ({ roomId, roomIndex, playerNickname, onFocus, onBlur }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [visible, setVisible] = useState(true);
@@ -23,38 +23,19 @@ const ChatBox: React.FC<ChatBoxProps> = ({ roomId, playerNickname, roomIndex = n
   const socket = getSocket();
 
   useEffect(() => {
-    // 전체 채팅 or 방 내부 채팅 구분
-    if (roomIndex === null) {
-      // 전체 채팅
-      const handleChat = (data: { roomId: string; nickname: string; message: string; time: number }) => {
-        if (data.roomId === roomId) {
-          setMessages((msgs) => [...msgs.slice(-49), { nickname: data.nickname, message: data.message, time: data.time }]);
-        }
-      };
-      socket.on('chat', handleChat);
-      return () => {
-        socket.off('chat', handleChat);
-      };
-    } else {
-      // 방 내부 채팅
-      const handleRoomChat = (data: { nickname: string; message: string; time: number }) => {
-        setMessages((msgs) => [...msgs.slice(-49), { nickname: data.nickname, message: data.message, time: data.time }]);
-      };
-      socket.on('roomChat', handleRoomChat);
-      return () => {
-        socket.off('roomChat', handleRoomChat);
-      };
-    }
+    const handleRoomChat = (data: { nickname: string; message: string; time: number }) => {
+      setMessages((msgs) => [...msgs.slice(-49), { nickname: data.nickname, message: data.message, time: data.time }]);
+    };
+    socket.on('roomChat', handleRoomChat);
+    return () => {
+      socket.off('roomChat', handleRoomChat);
+    };
   }, [roomId, roomIndex, socket]);
 
   const handleSend = () => {
     const msg = input.trim();
     if (!msg) return;
-    if (roomIndex === null) {
-      socket.emit('chat', { roomId, nickname: playerNickname, message: msg, time: Date.now() });
-    } else {
-      socket.emit('roomChat', { roomId, roomIndex, nickname: playerNickname, message: msg, time: Date.now() });
-    }
+    socket.emit('roomChat', { roomId, roomIndex, nickname: playerNickname, message: msg, time: Date.now() });
     setInput('');
   };
 
@@ -67,12 +48,10 @@ const ChatBox: React.FC<ChatBoxProps> = ({ roomId, playerNickname, roomIndex = n
     }
   };
 
-  // 단축키: 엔터로 채팅창 포커스/해제
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Enter') {
         if (document.activeElement === inputRef.current) {
-          // 이미 포커스면 포커스 해제
           inputRef.current.blur();
         } else {
           setVisible(true);
@@ -87,7 +66,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ roomId, playerNickname, roomIndex = n
   return (
     <div style={{
       position: 'absolute',
-      right: 24,
+      left: 24,
       bottom: 24,
       width: 320,
       background: 'rgba(30,30,30,0.85)',
@@ -114,7 +93,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ roomId, playerNickname, roomIndex = n
         onKeyDown={handleKeyDown}
         onFocus={onFocus}
         onBlur={onBlur}
-        placeholder={roomIndex === null ? "채팅 입력 (Enter)" : "방 내부 채팅 (Enter)"}
+        placeholder="방 내부 채팅 (Enter)"
         style={{
           width: '100%',
           border: 'none',
@@ -132,4 +111,4 @@ const ChatBox: React.FC<ChatBoxProps> = ({ roomId, playerNickname, roomIndex = n
   );
 };
 
-export default ChatBox; 
+export default RoomChatBox; 

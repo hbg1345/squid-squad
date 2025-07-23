@@ -296,6 +296,17 @@ io.on('connection', (socket) => {
         }
     }
   });
+
+  // 방 내부 채팅(roomIndex별)
+  socket.on('roomChat', ({ roomId, roomIndex, nickname, message, time }) => {
+    const room = rooms[roomId];
+    if (!room) return;
+    Object.entries(room.players).forEach(([id, player]) => {
+      if (player.roomIndex === roomIndex) {
+        io.to(id).emit('roomChat', { nickname, message, time });
+      }
+    });
+  });
 });
 
 // 60fps 기준으로 위치 계산 및 broadcast (방별로)

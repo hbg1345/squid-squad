@@ -5,6 +5,7 @@ import { getSocket } from '../socket';
 import ChatBox from './ChatBox';
 import GameDescriptionModal from './GameDescriptionModal';
 import useAudio from '../hooks/useAudio';
+import RoomChatBox from './RoomChatBox';
 
 const PLAYER_RADIUS = 16;
 const PLAYER_MOVE_SPEED = 216;
@@ -214,7 +215,11 @@ const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, all
     return () => gameRef.current?.destroy(true);
   }, [roomIndex, onExit, myId, roomId, isChattingRef]);
 
-  return <div ref={phaserRef} />;
+  return (
+    <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
+      <div ref={phaserRef} />
+    </div>
+  );
 });
 
 
@@ -711,6 +716,7 @@ const GameScreen = () => {
         <ChatBox 
           roomId={roomId} 
           playerNickname={playerNickname || '익명'}
+          roomIndex={roomIndex}
           onFocus={() => setIsChatting(true)}
           onBlur={() => setIsChatting(false)}
         />
