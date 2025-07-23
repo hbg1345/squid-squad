@@ -352,7 +352,7 @@ io.on('connection', (socket) => {
         if (room.gameType === 'pair') {
             const now = Date.now();
             room.pairGameStartTime = now + 3000;
-            room.gameEndTime = room.pairGameStartTime + 20000;
+            room.gameEndTime = room.pairGameStartTime + 60000;
             room.nextRotationChangeTime = room.pairGameStartTime;
             room.lastUpdateTime = room.pairGameStartTime;
         }

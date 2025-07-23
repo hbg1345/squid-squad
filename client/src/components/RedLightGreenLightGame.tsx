@@ -553,7 +553,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     // 타이머가 0이 되면 토큰 개수에 따라 phase 분기
     useEffect(() => {
         if (phase === 'waiting' && timer <= 0) {
-            if (tokenCount >= 1) {
+            if (tokenCount >= 10) {
                 setPhase('survived');
             } else {
                 // 제한시간 초과로 죽는 경우: 즉시 서버에 playerDead 전송
@@ -790,7 +790,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
               description={[
                 "술래가 뒤를 돌아볼 때 움직이면 탈락합니다.",
                 "술래의 시야에 닿으면 미니게임을 진행해야 합니다.",
-                "제한 시간 내에 20개의 토큰 중 1개 이상을 획득하여",
+                "제한 시간 내에 20개의 토큰 중 10개 이상을 획득하여",
                 "탈출하세요.",
               ]}
             />
