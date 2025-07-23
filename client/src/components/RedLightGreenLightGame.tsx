@@ -99,12 +99,14 @@ class RedLightGreenLightScene extends Phaser.Scene {
         this.myId = this.socket.id ?? '';
         this.socket.emit('joinGame', { roomId: this.roomId, nickname: this.playerNickname, character: this.myCharacter });
 
-        // Set world bounds to be larger than the screen
-        const worldWidth = 1950;
-        const worldHeight = 1000;
+        // 화면 크기를 기준으로 월드 크기 설정 (예: 가로 2배, 세로 1.5배)
+        const worldWidth = this.scale.width * 1;
+        const worldHeight = this.scale.height * 1;
+
         // Add background image and set world bounds
         this.add.image(0, 0, 'background').setOrigin(0, 0).setDisplaySize(worldWidth, worldHeight);
         this.physics.world.setBounds(0, 0, worldWidth, worldHeight);
+        
         // Set camera bounds
         this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
 
@@ -600,12 +602,10 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             gameRef.current.focus();
         }
         if (!gameInstance.current) {
-            const width = window.innerWidth;
-            const height = window.innerHeight;
             const config: Phaser.Types.Core.GameConfig = {
                 type: Phaser.AUTO,
-                width,
-                height,
+                width: '100%',
+                height: '100%',
                 parent: gameRef.current,
                 backgroundColor: '#F0F0F0',
                 scale: {
