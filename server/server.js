@@ -58,25 +58,22 @@ function broadcastYounghee(roomId) {
 //   });
 // }, 5000);
 
-// 1~5초 랜덤으로 Younghee 위치 변경 및 브로드캐스트
-function scheduleYoungheeMove() {
+// 1~5초 랜덤으로 Younghee 위치 변경 및 브로드캐스트 (방별 타이머)
+function scheduleYoungheeMoveForRoom(roomId) {
   const delay = Math.random() * 4000 + 1000; // 1000~5000ms
-  setTimeout(() => {
-    Object.keys(rooms).forEach(roomId => {
-      randomizeYoungheePosition(roomId);
-      // youngheeUpdate에 nextDelay(ms)도 같이 보냄
-      const room = rooms[roomId];
-      if (!room) return;
-      io.to(roomId).emit('youngheeUpdate', {
-        x: room.younghee.x,
-        y: room.younghee.y,
-        nextDelay: delay
-      });
+  const room = rooms[roomId];
+  if (!room) return;
+  if (room.youngheeTimer) clearTimeout(room.youngheeTimer);
+  room.youngheeTimer = setTimeout(() => {
+    randomizeYoungheePosition(roomId);
+    io.to(roomId).emit('youngheeUpdate', {
+      x: room.younghee.x,
+      y: room.younghee.y,
+      nextDelay: delay
     });
-    scheduleYoungheeMove(); // 재귀 호출로 반복
+    scheduleYoungheeMoveForRoom(roomId);
   }, delay);
 }
-scheduleYoungheeMove();
 
 function broadcastGameState(roomId) {
   const room = rooms[roomId];
@@ -158,7 +155,8 @@ io.on('connection', (socket) => {
       if (waitingPlayers.length >= MATCH_SIZE) {
         const matched = waitingPlayers.splice(0, MATCH_SIZE);
         const roomId = `room${roomSeq++}`;
-        rooms[roomId] = { players: {}, tokens: [], created: Date.now(), younghee: { x: 360, y: 180 }, gameType: 'redlight', readyPlayers: new Set() };
+        rooms[roomId] = { players: {}, tokens: [], created: Date.now(), younghee: { x: 360, y: 180 }, gameType: 'redlight', readyPlayers: new Set(), youngheeTimer: null };
+        scheduleYoungheeMoveForRoom(roomId);
         matched.forEach(s => {
           s.join(roomId);
           s.emit('matchFound', { roomId });
