@@ -51,12 +51,25 @@ function broadcastYounghee(roomId) {
 }
 
 // 5초마다 각 방 Younghee 위치 랜덤 변경 및 브로드캐스트
-setInterval(() => {
-  Object.keys(rooms).forEach(roomId => {
-    randomizeYoungheePosition(roomId);
-    broadcastYounghee(roomId);
-  });
-}, 5000);
+// setInterval(() => {
+//   Object.keys(rooms).forEach(roomId => {
+//     randomizeYoungheePosition(roomId);
+//     broadcastYounghee(roomId);
+//   });
+// }, 5000);
+
+// 1~5초 랜덤으로 Younghee 위치 변경 및 브로드캐스트
+function scheduleYoungheeMove() {
+  const delay = Math.random() * 4000 + 1000; // 1000~5000ms
+  setTimeout(() => {
+    Object.keys(rooms).forEach(roomId => {
+      randomizeYoungheePosition(roomId);
+      broadcastYounghee(roomId);
+    });
+    scheduleYoungheeMove(); // 재귀 호출로 반복
+  }, delay);
+}
+scheduleYoungheeMove();
 
 function broadcastGameState(roomId) {
   const room = rooms[roomId];
@@ -203,8 +216,14 @@ io.on('connection', (socket) => {
     if (!room) return;
     if (!room.players[socket.id]) return;
     room.players[socket.id].survived = true;
+    // --- 로그 추가: 현재 players와 survived 여부 ---
+    console.log(`[survived] roomId=${roomId}`);
+    Object.entries(room.players).forEach(([id, player]) => {
+      console.log(`  playerId=${id}, nickname=${player.nickname}, survived=${!!player.survived}`);
+    });
     // 모든 남은 플레이어가 survived를 보냈는지 체크
     const allSurvived = Object.values(room.players).every(p => p.survived);
+    console.log(`[survived] allSurvived=${allSurvived}`);
     if (allSurvived) {
       const playerList = Object.entries(room.players).map(([id, info]) => ({ id, nickname: info.nickname }));
       console.log(`[phaseChange] roomId=${roomId}, players:`, Object.keys(room.players), 'playerList:', playerList);

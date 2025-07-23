@@ -515,10 +515,13 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             if (tokenCount >= 1) {
                 setPhase('survived');
             } else {
+                // 제한시간 초과로 죽는 경우: 즉시 서버에 playerDead 전송
+                const socket = getSocket();
+                socket.emit('playerDead', { roomId });
                 setPhase('dead');
             }
         }
-    }, [phase, timer, tokenCount]);
+    }, [phase, timer, tokenCount, roomId]);
 
     // survived가 되면 서버에 알림
     useEffect(() => {
@@ -655,6 +658,13 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
         setInvincibleUntil(Date.now() + 3000); // 3초 무적
     };
 
+    // AlphabetModal 실패 시 죽음: 즉시 서버에 playerDead 전송
+    const handleAlphabetFail = () => {
+        const socket = getSocket();
+        socket.emit('playerDead', { roomId });
+        setPhase('dead');
+    };
+
     // 타이머 UI
     const timerUI = phase === 'waiting' && (
         <div style={{
@@ -705,7 +715,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
                 isOpen={showAlphabetModal}
                 onClose={() => setShowAlphabetModal(false)}
                 onSuccess={handleAlphabetSuccess}
-                onFail={() => setPhase('dead')}
+                onFail={handleAlphabetFail}
             />
             {/* Back button */}
             <div className="back-button-container">
