@@ -46,9 +46,6 @@
     position: relative;
     z-index: 1;
     transition: transform 0.5s cubic-bezier(0.55, 0.085, 0.68, 0.53), opacity 0.5s ease;
-    /* 서약서 이미지의 원래 크기에 맞춰서 너비/높이 설정 */
-    width: 600px; 
-    height: 900px; /* 대략적인 서약서 높이 */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -60,9 +57,11 @@
   }
   
   .contract-image {
-    position: absolute;
-    width: 100%;
-    height: auto;
+    /* position: absolute을 제거하여 wrapper 크기를 결정하도록 함 */
+    width: auto; /* 너비는 높이에 맞춰 자동 조절 */
+    height: 85vh; /* 화면 높이의 85%를 차지하도록 설정 */
+    max-height: 800px; /* 너무 큰 화면에서는 최대 800px까지만 커지도록 제한 */
+    display: block;
     border-radius: 10px;
     opacity: 0;
     animation: flyInContract 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) 1s forwards;
@@ -70,11 +69,11 @@
   
   .nickname-input-field {
     position: absolute;
-    /* top, left를 %로 변경하여 반응형으로 만듦 */
-    top: 80.5%; 
-    left: 50%;
+    top: 80.3%; /* 숫자가 작아질수록 위치가 위로 올라감 */
+    left: 83%; /* 숫자가 작아질수록 왼쪽으로 이동 */
     transform: translateX(-50%);
-    width: 150px;
+    width: 25%; /* 서약서 이미지 너비의 25%를 차지하도록 설정 */
+    max-width: 150px; /* 최대 너비는 150px로 제한 */
     padding: 13px;
     border: 1px solid #d8d6d6;
     background-color: transparent;
@@ -85,7 +84,7 @@
     transition: background-color 0.2s ease;
     opacity: 0;
     animation: fadeIn 0.7s ease-out 1.5s forwards;
-    z-index: 2; /* 이미지 위에 오도록 */
+    z-index: 2;
   }
   
   .nickname-input-field:focus,
@@ -99,7 +98,8 @@
     top: 88%;
     left: 50%;
     transform: translateX(-50%);
-    width: 200px;
+    width: 33%; /* 서약서 이미지 너비의 33%를 차지하도록 설정 */
+    max-width: 200px; /* 최대 너비는 200px로 제한 */
     padding: 15px;
     border: none;
     border-radius: 8px;
@@ -110,7 +110,7 @@
     transition: background-color 0.2s;
     opacity: 0;
     animation: fadeIn 0.7s ease-out 1.5s forwards;
-    z-index: 2; /* 이미지 위에 오도록 */
+    z-index: 2;
   }
   
   .start-matching-button:disabled {

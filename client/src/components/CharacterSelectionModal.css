@@ -51,13 +51,8 @@
   }
   
   .character-item.selected {
-    border-color: #249f9c;
-    transform: scale(1.1);
-    box-shadow: 0 0 15px #249f9c;
-  }
-
-  .character-item.confirmed {
     border-color: #ff2a7f;
+    transform: scale(1.1);
     box-shadow: 0 0 20px #e0236a;
   }
   
