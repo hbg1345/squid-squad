@@ -117,7 +117,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
         // this.cameras.main.setBackgroundColor('#F0F0F0');
 
         // 1. Current Survivors Display
-        this.survivorText = this.add.text(this.scale.width / 2, 50, '현재 생존자: 200/456', {
+        this.survivorText = this.add.text(this.scale.width / 2, 50, '현재 생존자: 0/0', {
             fontSize: '32px',
             color: '#000000',
             fontFamily: 'Arial, sans-serif',
@@ -201,7 +201,8 @@ class RedLightGreenLightScene extends Phaser.Scene {
             });
             // 생존자 수 표시 (size → Object.keys(...).length)
             const survivorCount = data.players ? Object.keys(data.players).length : 0;
-            this.survivorText.setText(`현재 생존자: ${survivorCount}/456`);
+            const totalCount = data.totalPlayers || survivorCount;
+            this.survivorText.setText(`현재 생존자: ${survivorCount}/${totalCount}`);
             // 내 tokenCount를 서버 값으로 갱신
             if (data.players && data.players[this.myId] && this.setTokenCount) {
                 this.setTokenCount(data.players[this.myId].tokenCount || 0);
