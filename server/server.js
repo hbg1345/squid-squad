@@ -74,6 +74,7 @@ scheduleYoungheeMove();
 function broadcastGameState(roomId) {
   const room = rooms[roomId];
   if (!room) return;
+  // tokenCount도 포함해서 브로드캐스트
   io.to(roomId).emit('gameState', { players: room.players });
   io.to(roomId).emit('tokensUpdate', room.tokens);
 }
@@ -89,7 +90,7 @@ io.on('connection', (socket) => {
   socket.on('joinGame', ({ roomId, nickname, character }) => {
     console.log(`[joinGame] socket.id=${socket.id}, roomId=${roomId}, nickname=${nickname}, character=${character}`);
     if (!rooms[roomId]) return;
-    rooms[roomId].players[socket.id] = { x: 100, y: 100, nickname, character };
+    rooms[roomId].players[socket.id] = { x: 100, y: 100, nickname, character, tokenCount: 0 };
     rooms[roomId].playerInputs = rooms[roomId].playerInputs || {};
     rooms[roomId].playerInputs[socket.id] = { left: false, right: false, up: false, down: false };
     // 토큰 초기화(없거나 비어 있으면 생성)
@@ -127,6 +128,10 @@ io.on('connection', (socket) => {
       while (rooms[roomId].tokens.length < MAX_TOKENS) {
         const newToken = randomToken();
         rooms[roomId].tokens.push(newToken);
+      }
+      // 토큰 먹은 플레이어의 tokenCount 증가
+      if (rooms[roomId].players[socket.id]) {
+        rooms[roomId].players[socket.id].tokenCount = (rooms[roomId].players[socket.id].tokenCount || 0) + 1;
       }
       io.to(roomId).emit('tokensUpdate', rooms[roomId].tokens);
     }
@@ -197,6 +202,17 @@ io.on('connection', (socket) => {
         const PUSH_DIST = 100;
         room.players[id].x += dx * PUSH_DIST;
         room.players[id].y += dy * PUSH_DIST;
+
+        // 밀쳐진 플레이어가 토큰을 갖고 있으면 1개 떨어뜨림
+        if (room.players[id].tokenCount && room.players[id].tokenCount > 0) {
+          room.players[id].tokenCount -= 1;
+          // 떨어진 토큰을 현재 위치에 생성
+          const droppedToken = randomToken();
+          droppedToken.x = room.players[id].x;
+          droppedToken.y = room.players[id].y;
+          room.tokens.push(droppedToken);
+          io.to(roomId).emit('tokensUpdate', room.tokens);
+        }
 
         // 3. 해당 방의 모든 클라이언트에게 브로드캐스트합니다.
         console.log(`[SUCCESS] Pushing player ${id} in room ${roomId}`);
