@@ -82,6 +82,7 @@ const NicknameInput: React.FC = () => {
                     placeholder=""
                     maxLength={10}
                     className={`nickname-input-field ${nickname ? 'has-text' : ''}`}
+                    style={{ fontSize: nickname.length >= 5 ? '1rem' : '1.5rem' }}
                 />
                 <button
                     onClick={handleStartMatching}
