@@ -133,7 +133,7 @@ io.on('connection', (socket) => {
       if (rooms[roomId].players[socket.id]) {
         rooms[roomId].players[socket.id].tokenCount = (rooms[roomId].players[socket.id].tokenCount || 0) + 1;
       }
-      io.to(roomId).emit('tokensUpdate', rooms[roomId].tokens);
+      broadcastGameState(roomId);
     }
   });
 

@@ -57,6 +57,8 @@ class RedLightGreenLightScene extends Phaser.Scene {
 
     private lastInputState: { left: boolean, right: boolean, up: boolean, down: boolean } = { left: false, right: false, up: false, down: false };
 
+    public setTokenCount?: (n: number) => void;
+
     constructor() {
         super({ key: 'RedLightGreenLightScene' });
     }
@@ -199,6 +201,10 @@ class RedLightGreenLightScene extends Phaser.Scene {
             // 생존자 수 표시 (size → Object.keys(...).length)
             const survivorCount = data.players ? Object.keys(data.players).length : 0;
             this.survivorText.setText(`현재 생존자: ${survivorCount}/456`);
+            // 내 tokenCount를 서버 값으로 갱신
+            if (data.players && data.players[this.myId] && this.setTokenCount) {
+                this.setTokenCount(data.players[this.myId].tokenCount || 0);
+            }
         };
         this.handleYoungheeUpdate = (data: any) => {
             if (this.younghee) {
@@ -206,7 +212,9 @@ class RedLightGreenLightScene extends Phaser.Scene {
                 this.drawYoungheeVision(data.x, data.y);
             }
         };
-        this.socket.on('gameState', this.handleGameState);
+        this.socket.on('gameState', (data) => {
+            this.handleGameState(data);
+        });
         this.socket.on('youngheeUpdate', this.handleYoungheeUpdate);
         this.socket.on('tokensUpdate', (data) => {
           // 기존 토큰 모두 제거
@@ -236,14 +244,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
         this.input.keyboard!.on('keyup', this.handleKeyInput, this);
 
         //tokens
-        // 토큰 개수 표시 ui
-        const margin = 16;
-        this.tokenCountText = this.add
-          .text(this.scale.width - 100, margin, '먹은 토큰: 0', {
-            fontSize: '16px', color: '#000'
-          })
-          .setOrigin(1, 0)
-          .setScrollFactor(0); // 오른쪽 상단에 위치, fixed to screen
         // 토큰 그룹 생성
         this.tokens = this.physics.add.group();
 
@@ -291,13 +291,6 @@ class RedLightGreenLightScene extends Phaser.Scene {
         if (droppedAt && Date.now() - droppedAt < 1000) return;
         // 서버에 토큰 먹기 알림
         this.socket.emit('collectToken', { roomId: this.roomId, tokenId });
-        // 내 토큰 카운트만 증가
-        this.tokenCount++;
-        this.tokenCountText.setText(`먹은 토큰: ${this.tokenCount}`);
-        // React state와 연동
-        if (typeof window !== 'undefined' && (window as any).onCollectToken) {
-          (window as any).onCollectToken();
-        }
       }
     }
 
@@ -628,6 +621,16 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
         };
     }, [invincibleUntil]);
 
+    // Phaser 인스턴스에 setTokenCount를 전달
+    useEffect(() => {
+        if (gameInstance.current) {
+            const scene = gameInstance.current.scene.getScene('RedLightGreenLightScene') as any;
+            if (scene) {
+                scene.setTokenCount = setTokenCount;
+            }
+        }
+    }, [setTokenCount, gameInstance.current]);
+
     useEffect(() => {
         if (gameRef.current) {
             gameRef.current.tabIndex = 0;
@@ -736,6 +739,10 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
                     onBlur={() => setIsChatting(false)}
                 />
             )}
+            {/* 토큰 개수 표시 (React state와 동기화) */}
+            <div style={{ position: 'fixed', top: 16, right: 16, color: '#000', fontSize: 16, zIndex: 1000, background: 'rgba(255,255,255,0.7)', borderRadius: 8, padding: '4px 16px', fontWeight: 'bold' }}>
+                먹은 토큰: {tokenCount}
+            </div>
             {/* Container where the Phaser game will be rendered */}
             {phase !== 'dead' && (
                 <div ref={gameRef} className="game-container" />
