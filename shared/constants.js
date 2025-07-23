@@ -1,5 +1,5 @@
 module.exports = {
-  MATCH_SIZE: 2,
+  MATCH_SIZE: 10,
   MAX_TOKENS: 20,
-  WAIT_TIME: 10
+  WAIT_TIME: 60
 }; 

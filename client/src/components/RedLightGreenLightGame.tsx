@@ -2,8 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import './RedLightGreenLight.css';
 import { getSocket, disconnectSocket } from '../socket';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import AlphabetModal from './AlphabetModal';
+import ChatBox from './ChatBox';
+import GameDescriptionModal from './GameDescriptionModal';
+import { WAIT_TIME } from '../constants/game';
 
 // Vite 환경변수 타입 선언 (없으면 추가)
 declare global {
@@ -29,6 +32,7 @@ class RedLightGreenLightScene extends Phaser.Scene {
     private playerNickname: string = '';
     private youngheeListenerRegistered = false;
     private roomId: string = '';
+    private myCharacter: string = 'player.png';
 
     private visionAngle: number     = 60;   // 콘의 벌어짐 각도 (°)
     private visionDirection: number = 270;  // 시야가 향하는 기본 방향 (°)
@@ -48,9 +52,13 @@ class RedLightGreenLightScene extends Phaser.Scene {
     private handleYoungheeUpdate: any;
 
     // 충돌 처리
-    private pushKey!: Phaser.Input.Keyboard.Key;
+    private pushKey!: Phaser.Input.Keyboard.Key | undefined;
     private pushRadius: number = 600; // 푸쉬 반경 (px)
     private pushStrength: number = 300; // 푸쉬 강도 (px/s) 
+
+    private lastInputState: { left: boolean, right: boolean, up: boolean, down: boolean } = { left: false, right: false, up: false, down: false };
+
+    public setTokenCount?: (n: number) => void;
 
     constructor() {
         super({ key: 'RedLightGreenLightScene' });
@@ -60,12 +68,14 @@ class RedLightGreenLightScene extends Phaser.Scene {
      * Initializes the scene with data passed from the React component.
      * @param data - Data object containing the player's nickname.
      */
-    init(data: { playerNickname: string, roomId?: string }) {
-        const settingsData = this.sys.settings.data as { playerNickname?: string, roomId?: string };
+    init(data: { playerNickname: string, roomId?: string, character?: string }) {
+        const settingsData = this.sys.settings.data as { playerNickname?: string, roomId?: string, character?: string };
         const nickname = data?.playerNickname || settingsData?.playerNickname || '';
         const roomId = data?.roomId || settingsData?.roomId || '';
+        const character = data?.character || settingsData?.character || 'player.png';
         this.playerNickname = nickname;
         this.roomId = roomId;
+        this.myCharacter = character;
     }
 
     /**
@@ -73,8 +83,14 @@ class RedLightGreenLightScene extends Phaser.Scene {
      */
     preload() {
         // 이미지 불러오기 
-        this.load.image('younghee', '/younghee.png'); 
+        this.load.image('background', '/background.png');
+        this.load.image('younghee', '/younghee.png');
+        // 모든 플레이어 캐릭터 이미지 로드
         this.load.image('player', '/player.png');
+        this.load.image('player2', '/player2.png');
+        this.load.image('player3', '/player3.png');
+        this.load.image('player4', '/player4.png');
+        this.load.image('player5', '/player5.png');
         this.load.image('token1', '/token1.png');
         this.load.image('token2', '/token2.png');
     }
@@ -84,17 +100,29 @@ class RedLightGreenLightScene extends Phaser.Scene {
      */
     create() {
         this.myId = this.socket.id ?? '';
-        this.socket.emit('joinGame', { roomId: this.roomId, nickname: this.playerNickname });
+        this.socket.emit('joinGame', { roomId: this.roomId, nickname: this.playerNickname, character: this.myCharacter });
+
+        // 화면 크기를 기준으로 월드 크기 설정 (예: 가로 2배, 세로 1.5배)
+        const worldWidth = this.scale.width * 1;
+        const worldHeight = this.scale.height * 1;
+
+        // Add background image and set world bounds
+        this.add.image(0, 0, 'background').setOrigin(0, 0).setDisplaySize(worldWidth, worldHeight);
+        this.physics.world.setBounds(0, 0, worldWidth, worldHeight);
+        
+        // Set camera bounds
+        this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
+
         // Set a light grey background color as in the image
-        this.cameras.main.setBackgroundColor('#F0F0F0');
+        // this.cameras.main.setBackgroundColor('#F0F0F0');
 
         // 1. Current Survivors Display
-        this.survivorText = this.add.text(this.scale.width / 2, 50, '현재 생존자: 200/456', {
-            fontSize: '32px',
-            color: '#000000',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold'
-        }).setOrigin(0.5); // Center horizontally
+        // this.survivorText = this.add.text(this.scale.width / 2, 50, '현재 생존자: 0/0', {
+        //     fontSize: '32px',
+        //     color: '#000000',
+        //     fontFamily: 'Arial, sans-serif',
+        //     fontStyle: 'bold'
+        // }).setOrigin(0.5).setScrollFactor(0); // Center horizontally, fixed to screen
 
         // 2. Younghee (Doll) Implementation
         // Initial Younghee position (randomized later)
@@ -128,7 +156,9 @@ class RedLightGreenLightScene extends Phaser.Scene {
             // 1. 없는 플레이어 생성
             Object.entries(data.players).forEach(([id, info]: [string, any]) => {
                 if (!this.players.has(id)) {
-                    const sprite = this.physics.add.sprite(info.x, info.y, 'player')
+                    // 모든 플레이어 info.character 사용
+                    let spriteKey = (info.character || 'player').replace('.png', '');
+                    const sprite = this.physics.add.sprite(info.x, info.y, spriteKey)
                         .setScale(0.5)
                         .setOrigin(0.5, 0.5);
                     const pr = sprite.displayWidth * 0.7; //player 충돌체의 반지름 
@@ -171,7 +201,14 @@ class RedLightGreenLightScene extends Phaser.Scene {
             });
             // 생존자 수 표시 (size → Object.keys(...).length)
             const survivorCount = data.players ? Object.keys(data.players).length : 0;
-            this.survivorText.setText(`현재 생존자: ${survivorCount}/456`);
+            const totalCount = data.totalPlayers || survivorCount;
+            if (typeof window !== 'undefined' && (window as any).setSurvivorText) {
+              (window as any).setSurvivorText(`현재 생존자: ${survivorCount}/${totalCount}`);
+            }
+            // 내 tokenCount를 서버 값으로 갱신
+            if (data.players && data.players[this.myId] && this.setTokenCount) {
+                this.setTokenCount(data.players[this.myId].tokenCount || 0);
+            }
         };
         this.handleYoungheeUpdate = (data: any) => {
             if (this.younghee) {
@@ -179,7 +216,9 @@ class RedLightGreenLightScene extends Phaser.Scene {
                 this.drawYoungheeVision(data.x, data.y);
             }
         };
-        this.socket.on('gameState', this.handleGameState);
+        this.socket.on('gameState', (data) => {
+            this.handleGameState(data);
+        });
         this.socket.on('youngheeUpdate', this.handleYoungheeUpdate);
         this.socket.on('tokensUpdate', (data) => {
           // 기존 토큰 모두 제거
@@ -193,6 +232,11 @@ class RedLightGreenLightScene extends Phaser.Scene {
             t.setData('id', token.id);
             t.body.setCircle(tradius); //토큰 충돌체의 반지름름
             t.body.setOffset(0,0);
+            // 커스텀 속성 부여
+            t.setData('droppedAt', token.droppedAt || 0);
+            t.setData('vx', token.vx || 0);
+            t.setData('vy', token.vy || 0);
+            t.setData('moving', token.vx || token.vy ? true : false);
             this.tokens.add(t);
           });
         });
@@ -200,36 +244,12 @@ class RedLightGreenLightScene extends Phaser.Scene {
         // Keyboard input setup
         this.cursors = this.input.keyboard!.createCursorKeys();
         // 키 입력 상태 추적용
-        this.lastInputState = { left: false, right: false, up: false, down: false };
         this.input.keyboard!.on('keydown', this.handleKeyInput, this);
         this.input.keyboard!.on('keyup', this.handleKeyInput, this);
 
         //tokens
-        // 토큰 개수 표시 ui
-        const margin = 16;
-        this.tokenCountText = this.add
-          .text(this.scale.width - 100, margin, '먹은 토큰: 0', {
-            fontSize: '16px', color: '#000'
-          })
-          .setOrigin(1, 0); // 오른쪽 상단에 위치
         // 토큰 그룹 생성
         this.tokens = this.physics.add.group();
-
-        // 서버에서 토큰 정보 수신
-        this.socket.on('tokensUpdate', (tokens) => {
-          // 기존 토큰 모두 제거
-          this.tokens.clear(true, true);
-          // 서버에서 받은 토큰만 다시 생성
-          tokens.forEach((token: any) => {
-            const t = this.physics.add.sprite(token.x, token.y, token.key)
-              .setScale(0.3)
-              .setOrigin(0.5);
-            t.setData('id', token.id);
-            t.body.setCircle(16);
-            t.body.setOffset(t.displayWidth/2 - 16, t.displayHeight/2 - 16);
-            this.tokens.add(t);
-          });
-        });
 
         // 플레이어와 토큰 충돌/겹침 처리
         const myPlayer = this.players.get(this.myId);
@@ -254,9 +274,33 @@ class RedLightGreenLightScene extends Phaser.Scene {
                 );
             }
         });
+        this.socket.on('playerPushed', ({ id, x, y }) => {
+            const sprite = this.players.get(id);
+            if (sprite) {
+                sprite.x = x;
+                sprite.y = y;
+            }
+        });
     }
 
-    private lastInputState: { left: boolean, right: boolean, up: boolean, down: boolean } = { left: false, right: false, up: false, down: false };
+    /** 플레이어가 토큰과 겹쳤을 때 호출 */
+    private handleCollectToken: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
+        player, token
+    ) => {
+      const t = token as Phaser.Physics.Arcade.Sprite;
+      const tokenId = t.getData('id');
+      const droppedAt = t.getData('droppedAt') || 0;
+      if (typeof tokenId === 'number') {
+        // 무적 시간(1초) 체크
+        if (droppedAt && Date.now() - droppedAt < 1000) return;
+        // 서버에 토큰 먹기 알림
+        this.socket.emit('collectToken', { roomId: this.roomId, tokenId });
+      }
+    }
+
+    /**
+     * Handles keyboard input events for movement and emits to server if changed
+     */
     private handleKeyInput() {
         const input = {
             left: this.cursors.left.isDown,
@@ -267,27 +311,8 @@ class RedLightGreenLightScene extends Phaser.Scene {
         // 입력 상태가 바뀌었을 때만 emit
         if (JSON.stringify(input) !== JSON.stringify(this.lastInputState)) {
             this.socket.emit('playerInput', { roomId: this.roomId, input });
-            this.lastInputState = input;
+            this.lastInputState = { ...input };
         }
-    }
-
-    /** 플레이어가 토큰과 겹쳤을 때 호출 */
-    private handleCollectToken: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
-        player, token
-    ) => {
-      const t = token as Phaser.Physics.Arcade.Sprite;
-      const tokenId = t.getData('id');
-      if (typeof tokenId === 'number') {
-        // 서버에 토큰 먹기 알림
-        this.socket.emit('collectToken', { roomId: this.roomId, tokenId });
-        // 내 토큰 카운트만 증가
-        this.tokenCount++;
-        this.tokenCountText.setText(`먹은 토큰: ${this.tokenCount}`);
-        // React state와 연동
-        if (typeof window !== 'undefined' && (window as any).onCollectToken) {
-          (window as any).onCollectToken();
-        }
-      }
     }
 
     /**
@@ -309,7 +334,41 @@ class RedLightGreenLightScene extends Phaser.Scene {
      * @param delta - The time elapsed since the last frame.
      */
     update(time: number, delta: number) {
-        if (!this.myId) return;
+        // 이 로그는 이미 동작하는 것을 확인했습니다.
+        // console.log('update called');
+        if (!this.myId || !this.players.get(this.myId)) return;
+
+        // --- 밀치기 기능 디버깅 ---
+        if (this.pushKey && Phaser.Input.Keyboard.JustDown(this.pushKey)) {
+            const mySprite = this.players.get(this.myId)!;
+            let collisionDetected = false;
+
+            this.players.forEach((otherSprite, id) => {
+                if (id === this.myId) return;
+
+                const dist = Phaser.Math.Distance.Between(mySprite.x, mySprite.y, otherSprite.x, otherSprite.y);
+                const myRadius = mySprite.displayWidth * 0.5;
+                const otherRadius = otherSprite.displayWidth * 0.7;
+                const requiredDist = myRadius + otherRadius + 30; // 충돌 인식 거리 조절 (30px)
+
+                if (dist <= requiredDist) {
+                    collisionDetected = true;
+                    // 내 위치에서 상대 위치로 향하는 방향(단위 벡터)으로 밀침
+                    const dx = otherSprite.x - mySprite.x;
+                    const dy = otherSprite.y - mySprite.y;
+                    const len = Math.sqrt(dx * dx + dy * dy);
+                    const dir = len > 0 ? { dx: dx / len, dy: dy / len } : { dx: 1, dy: 0 };
+                    this.socket.emit('playerPush', { id, dx: dir.dx, dy: dir.dy });
+                }
+            });
+
+            if (!collisionDetected) {
+            }
+        }
+        // --- 디버깅 끝 ---
+
+
+        // --- 기존 update 로직 (그대로 두세요) ---
         const mySprite = this.players.get(this.myId);
         if (!mySprite) return;
         // 입력 상태 체크 및 emit
@@ -344,55 +403,36 @@ class RedLightGreenLightScene extends Phaser.Scene {
             }
         }
         }
-        // 키 입력 상태 콘솔 출력 제거
-        if (JSON.stringify(input) !== JSON.stringify(this.lastInputState)) {
-            this.socket.emit('playerInput', input);
-            this.lastInputState = { ...input };
-        }
-        this.playerNameTexts.get(this.myId)?.setPosition(mySprite.x, mySprite.y - 30);
+        this.playerNameTexts.forEach((nameText, id) => {
+            const sprite = this.players.get(id);
+            if (sprite) {
+                nameText.setPosition(sprite.x, sprite.y - sprite.displayHeight / 2 - nameText.height - 2);
+            }
+        });
         this.physics.overlap(mySprite, this.tokens, this.handleCollectToken, undefined, this);
 
-        // space key를 한 번 누르면 푸쉬
-        if (Phaser.Input.Keyboard.JustDown(this.pushKey)) {
-            const mySprite = this.players.get(this.myId)!;
-            const myRadius = mySprite.displayWidth * 0.5;
-            const padding = 20;        // 충돌 감지 시 추가 여유치
-            const offset = 100;        // 밀어낼 때 움직일 픽셀 수
-            this.players.forEach((otherSprite, id) => {
-                if (id === this.myId) return;
-                // 1) 두 플레이어 사이 거리 계산
-                const dxTotal = otherSprite.x - mySprite.x;
-                const dyTotal = otherSprite.y - mySprite.y;
-                const dist = Math.hypot(dxTotal, dyTotal);
-                const otherRadius = otherSprite.displayWidth * 0.7;
-                // 2) 충돌 판정: 두 원이 서로 닿았으면 
-                if (dist <= myRadius + otherRadius + padding) {
-                    // 3) 밀어낼 방향 선택 (랜덤덤)
-                    const dir = Phaser.Math.RND.pick(['up','down','left','right']);
-                    let dx = 0, dy = 0;
-                    switch (dir){
-                        case 'up':    dy = -offset; break;
-                        case 'down':  dy =  offset; break;
-                        case 'left':  dx = -offset; break;
-                        case 'right': dx =  offset; break;
-                    }
-                    // 4) 즉시 위치 변경
-                    otherSprite.x += dx;
-                    otherSprite.y += dy;
-
-                     // 닉네임 텍스트도 같이 이동
-                     const nameText = this.playerNameTexts.get(id);
-                     if (nameText) {
-                        nameText.setPosition(
-                            otherSprite.x,
-                            otherSprite.y - otherSprite.displayHeight/2 - nameText.height - 2
-                        );
-                    }
-                    // 5) 서버에 동기화 요청
-                    this.socket.emit('playerPush', { id, dx, dy });
-                }
-            })
-        }
+        // 토큰 움직임/무적 시간 처리
+        this.tokens.getChildren().forEach((tokenSprite) => {
+            const t = tokenSprite as Phaser.Physics.Arcade.Sprite;
+            if (!t.active) return;
+            const droppedAt = t.getData('droppedAt') || 0;
+            const moving = t.getData('moving');
+            let vx = t.getData('vx') || 0;
+            let vy = t.getData('vy') || 0;
+            if (moving && Date.now() - droppedAt < 1000) {
+                // 1초간 속도 적용 (마찰감소)
+                vx *= 0.96;
+                vy *= 0.96;
+                t.x += vx * (delta / 1000);
+                t.y += vy * (delta / 1000);
+                t.setData('vx', vx);
+                t.setData('vy', vy);
+            } else if (moving) {
+                t.setData('vx', 0);
+                t.setData('vy', 0);
+                t.setData('moving', false);
+            }
+        });
     }
 
     // moveYounghee 제거 (서버 동기화로 대체)
@@ -442,21 +482,63 @@ type RedLightGreenLightGameProps = {
     roomId?: string;
 };
 
+const AUDIO_SRC = '/red_green_light.mp3';
+
 const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBack, playerNickname, roomId }) => {
     const gameRef = useRef<HTMLDivElement>(null);
     const gameInstance = useRef<Phaser.Game | null>(null);
     const navigate = useNavigate();
+    const location = useLocation();
+    const selectedCharacter = location.state?.character || 'player.png';
 
     // 제한 시간 및 phase 상태 추가
     const [phase, setPhase] = useState<'waiting' | 'dead' | 'survived' | 'playing'>('waiting');
-    const [timer, setTimer] = useState(10);
+    const [timer, setTimer] = useState(WAIT_TIME);
     const [tokenCount, setTokenCount] = useState(0);
     const [showAlphabetModal, setShowAlphabetModal] = useState(false);
     const [invincibleUntil, setInvincibleUntil] = useState(0);
+    const [isChatting, setIsChatting] = useState(false);
+    const [isDescribing, setIsDescribing] = useState(true);
+    const [isGameStarted, setIsGameStarted] = useState(false);
+
+    // 1. React state 추가
+    const [survivorText, setSurvivorText] = useState('');
+
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const lastYoungheeUpdateRef = useRef<number | null>(null);
+    const [_, forceRerender] = useState(0); // 오디오 ref 갱신용
+
+    // 2. window 콜백 등록
+    useEffect(() => {
+      (window as any).setSurvivorText = setSurvivorText;
+      return () => { delete (window as any).setSurvivorText; };
+    }, []);
+
+    // 모달 표시 및 준비 완료 신호 전송
+    useEffect(() => {
+        // 이 부분의 숫자를 조절하여 모달이 떠 있는 시간을 변경할 수 있습니다. (1000 = 1초)
+        const timer = setTimeout(() => {
+            setIsDescribing(false);
+            if (roomId) {
+                getSocket().emit('clientReady', { roomId });
+            }
+        }, 5000);
+        return () => clearTimeout(timer);
+    }, [roomId]);
+
+    // 게임 시작 신호 수신
+    useEffect(() => {
+        const onGameStart = () => setIsGameStarted(true);
+        const socket = getSocket();
+        socket.on('gameStart', onGameStart);
+        return () => {
+            socket.off('gameStart', onGameStart);
+        };
+    }, []);
 
     // 타이머 감소 로직
     useEffect(() => {
-        if (phase === 'waiting') {
+        if (phase === 'waiting' && isGameStarted) {
             let last = Date.now();
             const id = setInterval(() => {
                 const now = Date.now();
@@ -466,25 +548,51 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             }, 50);
             return () => clearInterval(id);
         }
-    }, [phase]);
+    }, [phase, isGameStarted]);
 
     // 타이머가 0이 되면 토큰 개수에 따라 phase 분기
     useEffect(() => {
         if (phase === 'waiting' && timer <= 0) {
-            if (tokenCount >= 1) {
+            if (tokenCount >= 10) {
                 setPhase('survived');
             } else {
+                // 제한시간 초과로 죽는 경우: 즉시 서버에 playerDead 전송
+                const socket = getSocket();
+                socket.emit('playerDead', { roomId });
                 setPhase('dead');
             }
         }
-    }, [phase, timer, tokenCount]);
+    }, [phase, timer, tokenCount, roomId]);
 
-    // survived phase가 되면 GameScreen(/room)으로 이동
+    // survived가 되면 서버에 알림
+    useEffect(() => {
+      if (phase === 'survived') {
+        const socket = getSocket();
+        socket.emit('survived', { roomId, nickname: playerNickname });
+      }
+    }, [phase, roomId, playerNickname]);
+
+    // 서버에서 phaseChange 이벤트를 받으면 /game2로 이동
+    useEffect(() => {
+      const socket = getSocket();
+      const handler = ({ phase, players, roomId: eventRoomId }: { phase: string, players: any[], roomId: string }) => {
+        // 현재 방과 일치하는 이벤트에만 반응
+        if (phase === 'pair' && eventRoomId === roomId) {
+          navigate('/game2', { state: { roomId, players, playerNickname } });
+        }
+      };
+      socket.on('phaseChange', handler);
+      return () => {
+        socket.off('phaseChange', handler);
+      };
+    }, [navigate, roomId, playerNickname]);
+
+    // survived phase가 되면 PairGameScreen(/game2)으로 이동
     useEffect(() => {
         if (phase === 'survived') {
-            navigate('/room');
+            navigate('/game2', { state: { roomId, playerNickname } });
         }
-    }, [phase, navigate]);
+    }, [phase, navigate, roomId, playerNickname]);
 
     // dead phase가 되면 자동으로 타이틀로 이동 + Phaser 인스턴스 안전 파괴 (중복 방지)
     const alreadyDead = useRef(false);
@@ -503,10 +611,16 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
         }
     }, [phase, onGoBack]);
 
+    useEffect(() => {
+        if (gameInstance.current && gameInstance.current.input && gameInstance.current.input.keyboard) {
+            gameInstance.current.input.keyboard.enabled = !isChatting;
+        }
+    }, [isChatting]);
+
     // phase가 바뀔 때마다 타이머/토큰 초기화 (dead->waiting 등)
     useEffect(() => {
         if (phase === 'waiting') {
-            setTimer(10);
+            setTimer(WAIT_TIME);
             setTokenCount(0);
         }
     }, [phase]);
@@ -526,18 +640,26 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
         };
     }, [invincibleUntil]);
 
+    // Phaser 인스턴스에 setTokenCount를 전달
+    useEffect(() => {
+        if (gameInstance.current) {
+            const scene = gameInstance.current.scene.getScene('RedLightGreenLightScene') as any;
+            if (scene) {
+                scene.setTokenCount = setTokenCount;
+            }
+        }
+    }, [setTokenCount, gameInstance.current]);
+
     useEffect(() => {
         if (gameRef.current) {
             gameRef.current.tabIndex = 0;
             gameRef.current.focus();
         }
         if (!gameInstance.current) {
-            const width = window.innerWidth;
-            const height = window.innerHeight;
             const config: Phaser.Types.Core.GameConfig = {
                 type: Phaser.AUTO,
-                width,
-                height,
+                width: '100%',
+                height: '100%',
                 parent: gameRef.current,
                 backgroundColor: '#F0F0F0',
                 scale: {
@@ -557,21 +679,63 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
             setTimeout(() => {
                 if (gameInstance.current) {
                     gameInstance.current.scene.stop('RedLightGreenLightScene');
-                    gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname, roomId });
+                    gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname, roomId, character: selectedCharacter });
                 }
             }, 100);
         } else {
             // Phaser 인스턴스가 이미 있으면 scene.stop 후 scene.start
             gameInstance.current.scene.stop('RedLightGreenLightScene');
-            gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname, roomId });
+            gameInstance.current.scene.start('RedLightGreenLightScene', { playerNickname, roomId, character: selectedCharacter });
         }
         return () => {
+            const socket = getSocket();
+            socket.off('gameState');
+            socket.off('youngheeUpdate');
+            socket.off('tokensUpdate');
             if (gameInstance.current) {
-                gameInstance.current.destroy(true); 
+                gameInstance.current.destroy(true);
                 gameInstance.current = null;
             }
         };
-    }, [playerNickname, roomId]); 
+    }, [playerNickname, roomId, selectedCharacter]); 
+
+    useEffect(() => {
+        const socket = getSocket();
+        let audioTimeout: number | null = null;
+        function onYoungheeUpdate(data: { x: number, y: number, nextDelay?: number }) {
+            const interval = data.nextDelay ?? 3000; // ms
+            const audio = audioRef.current;
+            if (audio) {
+                audio.pause();
+                audio.currentTime = 0;
+                const playWithRate = () => {
+                    if (audio.duration && !isNaN(audio.duration)) {
+                        const playbackRate = audio.duration > 0 ? audio.duration / (interval / 1000) : 1;
+                        audio.playbackRate = playbackRate;
+                    } else {
+                        audio.playbackRate = 1;
+                    }
+                    audio.play();
+                    // mp3가 끝나면 자동으로 멈추도록 타임아웃 설정 (혹시라도 중간에 끊기는 것 방지)
+                    if (audioTimeout) window.clearTimeout(audioTimeout);
+                    audioTimeout = window.setTimeout(() => {
+                        audio.pause();
+                        audio.currentTime = 0;
+                    }, interval);
+                };
+                if (audio.readyState >= 1) {
+                    playWithRate();
+                } else {
+                    audio.onloadedmetadata = playWithRate;
+                }
+            }
+        }
+        socket.on('youngheeUpdate', onYoungheeUpdate);
+        return () => {
+            socket.off('youngheeUpdate', onYoungheeUpdate);
+            if (audioTimeout) window.clearTimeout(audioTimeout);
+        };
+    }, []);
 
     const handleGoBack = () => {
         onGoBack();
@@ -583,11 +747,18 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
         setInvincibleUntil(Date.now() + 3000); // 3초 무적
     };
 
+    // AlphabetModal 실패 시 죽음: 즉시 서버에 playerDead 전송
+    const handleAlphabetFail = () => {
+        const socket = getSocket();
+        socket.emit('playerDead', { roomId });
+        setPhase('dead');
+    };
+
     // 타이머 UI
     const timerUI = phase === 'waiting' && (
         <div style={{
-            position: 'fixed', top: 32, left: '50%', transform: 'translateX(-50%)',
-            fontSize: timer <= 3 ? 100 : 32, color: '#fff', fontWeight: 'bold', zIndex: 1000,
+            position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
+            fontSize: timer <= 3 ? 100 : 32, color: '#fff', fontWeight: 'bold', zIndex: 9999,
             textShadow: '0 0 32px #000, 0 0 8px #000',
             pointerEvents: 'none',
             transition: 'font-size 0.2s cubic-bezier(0.4,1.4,0.6,1)',
@@ -596,11 +767,53 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
         </div>
     );
 
+    // 생존자 수 UI
+    // React survivorUI에서 해당 state 사용
+    const survivorUI = phase === 'waiting' && (
+        <div style={{
+            position: 'fixed', top: 60, left: '50%', transform: 'translateX(-50%)',
+            fontSize: 24, color: '#000', fontWeight: 'bold', zIndex: 1000,
+            background: 'rgba(255,255,255,0.7)', borderRadius: 8, padding: '4px 24px',
+            pointerEvents: 'none',
+        }}>
+            {survivorText}
+        </div>
+    );
+
     // deadUI 제거 (자동 이동)
 
     return (
         <div className="game-screen">
+            <GameDescriptionModal
+              isOpen={isDescribing}
+              title="무궁화 꽃이 피었습니다"
+              description={[
+                "술래가 뒤를 돌아볼 때 움직이면 탈락합니다.",
+                "술래의 시야에 닿으면 미니게임을 진행해야 합니다.",
+                "제한 시간 내에 20개의 토큰 중 10개 이상을 획득하여",
+                "탈출하세요.",
+              ]}
+            />
+            {!isDescribing && !isGameStarted && (
+                 <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white', fontSize: '24px', zIndex: 4000, pointerEvents: 'none' }}>
+                    다른 플레이어를 기다리는 중...
+                </div>
+            )}
             {timerUI}
+            {survivorUI}
+            {/* 채팅창 */}
+            {roomId && (
+                <ChatBox 
+                    roomId={roomId} 
+                    playerNickname={playerNickname || '익명'} 
+                    onFocus={() => setIsChatting(true)}
+                    onBlur={() => setIsChatting(false)}
+                />
+            )}
+            {/* 토큰 개수 표시 (React state와 동기화) */}
+            <div style={{ position: 'fixed', top: 16, right: 16, color: '#000', fontSize: 16, zIndex: 1000, background: 'rgba(255,255,255,0.7)', borderRadius: 8, padding: '4px 16px', fontWeight: 'bold' }}>
+                먹은 토큰: {tokenCount}
+            </div>
             {/* Container where the Phaser game will be rendered */}
             {phase !== 'dead' && (
                 <div ref={gameRef} className="game-container" />
@@ -609,7 +822,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
                 isOpen={showAlphabetModal}
                 onClose={() => setShowAlphabetModal(false)}
                 onSuccess={handleAlphabetSuccess}
-                onFail={() => setPhase('dead')}
+                onFail={handleAlphabetFail}
             />
             {/* Back button */}
             <div className="back-button-container">
@@ -620,6 +833,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
                     타이틀로 돌아가기
                 </button>
             </div>
+            <audio ref={audioRef} src={AUDIO_SRC} preload="auto" />
         </div>
     );
 };

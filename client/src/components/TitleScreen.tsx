@@ -1,10 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import './TitleScreen.css';
-import { getSocket } from '../socket';
-import MatchingModal from '../MatchingModal';
 import { useNavigate } from 'react-router-dom';
-import { MATCH_SIZE } from '../constants/game'; // MATCH_SIZE는 2로 설정되어 있어야 함
 
 // Squid Game style title screen scene
 class SquidGameTitleScene extends Phaser.Scene {
@@ -107,12 +104,13 @@ class SquidGameTitleScene extends Phaser.Scene {
                 duration: segmentDuration, // Duration for drawing this single segment.
                 ease: 'Linear', // Linear easing for a smooth drawing effect.
                 onUpdate: (tween) => {
+                    const target = tween.targets[0] as { x: number, y: number };
                     // Clear the temporary graphics and redraw the current segment up to the current tween position.
                     tempGraphics.clear();
                     tempGraphics.lineStyle(lineWidth, color);
                     tempGraphics.beginPath();
                     tempGraphics.moveTo(p1.x, p1.y);
-                    tempGraphics.lineTo(tween.targets[0].x, tween.targets[0].y);
+                    tempGraphics.lineTo(target.x, target.y);
                     tempGraphics.strokePath();
                 },
                 onComplete: () => {
@@ -181,7 +179,7 @@ class SquidGameTitleScene extends Phaser.Scene {
      * @param baseY - The base Y-coordinate for the letter.
      */
     private getLetterPaths(letter: string, baseX: number, baseY: number): { x: number, y: number }[][] {
-        const letterWidth = 80; // Reference width for a letter.
+        const letterWidth = 70; // Reference width for a letter.
         const letterHeight = 100; // Reference height for a letter.
         const halfWidth = letterWidth / 2;
         const halfHeight = letterHeight / 2;
@@ -344,139 +342,63 @@ class SquidGameTitleScene extends Phaser.Scene {
     }
 }
 
-type TitleScreenProps = {
-    onStartGame: (roomId: string, playerNickname: string) => void;
-};
 
-const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
-    // Reference to the DOM element where the Phaser game will be rendered.
+const TitleScreen: React.FC = () => {
     const gameRef = useRef<HTMLDivElement>(null);
-    // Reference to the Phaser game instance.
     const gameInstance = useRef<Phaser.Game | null>(null);
-    // State variable to control the visibility of the "Start Game" button.
     const [showStartButton, setShowStartButton] = useState(false);
-    const [showMatchingModal, setShowMatchingModal] = useState(false);
-    const [elapsed, setElapsed] = useState(0);
-    const [matchingCurrent, setMatchingCurrent] = useState(1); // 본인 포함
-    const [matchingTotal] = useState(MATCH_SIZE); // 매칭 인원수 상수 사용
-    const [roomId, setRoomId] = useState<string | null>(null);
-    const [nickname, setNickname] = useState('');
+    const navigate = useNavigate();
 
-    /**
-     * React useEffect hook:
-     * Initializes the Phaser game when the component mounts and cleans it up when it unmounts.
-     */
     useEffect(() => {
-        // Only initialize if gameRef exists and gameInstance hasn't been created yet.
         if (gameRef.current && !gameInstance.current) {
             const config: Phaser.Types.Core.GameConfig = {
-                type: Phaser.AUTO, // Automatically choose WebGL or Canvas rendering.
-                width: 800, // Initial width of the game canvas.
-                height: 600, // Initial height of the game canvas.
-                parent: gameRef.current, // The DOM element where the canvas will be inserted.
-                backgroundColor: '#000000', // Background color of the game canvas.
+                type: Phaser.AUTO,
+                width: '100%',
+                height: '100%',
+                parent: gameRef.current,
+                backgroundColor: '#000000',
                 scale: {
-                    mode: Phaser.Scale.FIT, // Scale the game to fit the parent container.
-                    autoCenter: Phaser.Scale.CENTER_BOTH // Center the game horizontally and vertically.
+                    mode: Phaser.Scale.FIT,
+                    autoCenter: Phaser.Scale.CENTER_BOTH
                 },
+                scene: SquidGameTitleScene
             };
 
-            // Create a new Phaser game instance.
             gameInstance.current = new Phaser.Game(config);
 
-            // Add and immediately start the 'SquidGameTitleScene'.
-            // Pass the onAnimationComplete callback to the scene so it can notify when animations are done.
-            gameInstance.current.scene.add('SquidGameTitleScene', SquidGameTitleScene, true, {
-              onAnimationComplete: () => { setTimeout(() => { setShowStartButton(true); }, 1000); }
-            });
+            setTimeout(() => {
+                setShowStartButton(true);
+            }, 3000);
         }
 
-        // Cleanup function for the useEffect hook:
-        // Destroys the Phaser game instance when the component unmounts to prevent memory leaks.
         return () => {
             if (gameInstance.current) {
                 gameInstance.current.destroy(true);
                 gameInstance.current = null;
             }
         };
-    }, []); // Empty dependency array ensures this effect runs only once on mount.
+    }, []);
 
-    useEffect(() => {
-        let timer: NodeJS.Timeout;
-        if (showMatchingModal) {
-            setElapsed(0);
-            getSocket().emit('joinMatch');
-        } else {
-            getSocket().emit('leaveMatch');
-        }
-        return () => { if (timer) clearInterval(timer); };
-    }, [showMatchingModal]);
-
-    useEffect(() => {
-        const handleMatchingCount = (count: number) => setMatchingCurrent(count);
-        const handleMatchFound = ({ roomId }: { roomId: string }) => {
-            setRoomId(roomId);
-            setShowMatchingModal(false);
-            onStartGame(roomId, nickname);
-        };
-        getSocket().on('matchingCount', handleMatchingCount);
-        getSocket().on('matchFound', handleMatchFound);
-        return () => {
-            getSocket().off('matchingCount', handleMatchingCount);
-            getSocket().off('matchFound', handleMatchFound);
-        };
-    }, [onStartGame, nickname]);
-
-    /**
-     * Handler for when the "Start Game" button is clicked.
-     */
-    const handleStartGame = () => {
-        setShowMatchingModal(true);
-    };
-    const handleCancelMatching = () => {
-        setShowMatchingModal(false);
+    const handleNavigateToNickname = () => {
+        navigate('/nickname');
     };
 
     return (
         <div className="title-screen">
-            {/* 닉네임 입력 UI 추가 */}
-            <input
-                type="text"
-                value={nickname}
-                onChange={e => setNickname(e.target.value)}
-                placeholder="닉네임 입력"
-                className="nickname-input"
-            />
-            {/* Container where the Phaser game will be rendered */}
             <div ref={gameRef} className="game-container" />
 
-            {/* The "Start Game" button, visible only after the animation completes */}
-            {showStartButton && !showMatchingModal && (
+            {showStartButton && (
                 <div className="start-button-container">
                     <button
                         className="start-button"
-                        onClick={handleStartGame}
+                        onClick={handleNavigateToNickname}
                     >
                         Start Game
                     </button>
                 </div>
             )}
-            <MatchingModal
-                open={showMatchingModal}
-                onCancel={handleCancelMatching}
-                current={matchingCurrent}
-                total={matchingTotal}
-                elapsed={elapsed}
-            />
         </div>
     );
 };
 
-const TitleScreenWithNav: React.FC = () => {
-  const navigate = useNavigate();
-  return <TitleScreen onStartGame={(roomId, playerNickname) => {
-    navigate('/game', { state: { roomId, playerNickname } });
-  }} />;
-};
-
-export default TitleScreenWithNav;
+export default TitleScreen;
