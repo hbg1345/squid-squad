@@ -203,14 +203,36 @@ io.on('connection', (socket) => {
         room.players[id].x += dx * PUSH_DIST;
         room.players[id].y += dy * PUSH_DIST;
 
-        // 밀쳐진 플레이어가 토큰을 갖고 있으면 1개 떨어뜨림
-        if (room.players[id].tokenCount && room.players[id].tokenCount > 0) {
-          room.players[id].tokenCount -= 1;
-          // 떨어진 토큰을 현재 위치에 생성
-          const droppedToken = randomToken();
-          droppedToken.x = room.players[id].x;
-          droppedToken.y = room.players[id].y;
-          room.tokens.push(droppedToken);
+        // 밀쳐진 플레이어가 토큰을 갖고 있으면 1/x(조화분포)로 절반 이하 랜덤 개수만큼 떨어뜨림
+        const tokenCount = room.players[id].tokenCount || 0;
+        const maxDrop = Math.floor(tokenCount / 2);
+        if (maxDrop > 0) {
+          // 1/x 분포로 x를 뽑기
+          let sum = 0;
+          for (let i = 1; i <= maxDrop; i++) sum += 1 / i;
+          let r = Math.random() * sum;
+          let x = 1;
+          for (let i = 1; i <= maxDrop; i++) {
+            r -= 1 / i;
+            if (r <= 0) {
+              x = i;
+              break;
+            }
+          }
+          room.players[id].tokenCount -= x;
+          for (let i = 0; i < x; i++) {
+            const droppedToken = randomToken();
+            // 랜덤 각도, 거리, 속도
+            const angle = Math.random() * 2 * Math.PI;
+            const dist = 30 + Math.random() * 20;
+            const speed = 200 + Math.random() * 100; // px/sec
+            droppedToken.x = room.players[id].x + Math.cos(angle) * dist;
+            droppedToken.y = room.players[id].y + Math.sin(angle) * dist;
+            droppedToken.vx = Math.cos(angle) * speed;
+            droppedToken.vy = Math.sin(angle) * speed;
+            droppedToken.droppedAt = Date.now();
+            room.tokens.push(droppedToken);
+          }
           io.to(roomId).emit('tokensUpdate', room.tokens);
         }
 

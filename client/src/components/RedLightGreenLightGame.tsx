@@ -220,6 +220,11 @@ class RedLightGreenLightScene extends Phaser.Scene {
             t.setData('id', token.id);
             t.body.setCircle(tradius); //토큰 충돌체의 반지름름
             t.body.setOffset(0,0);
+            // 커스텀 속성 부여
+            t.setData('droppedAt', token.droppedAt || 0);
+            t.setData('vx', token.vx || 0);
+            t.setData('vy', token.vy || 0);
+            t.setData('moving', token.vx || token.vy ? true : false);
             this.tokens.add(t);
           });
         });
@@ -280,7 +285,10 @@ class RedLightGreenLightScene extends Phaser.Scene {
     ) => {
       const t = token as Phaser.Physics.Arcade.Sprite;
       const tokenId = t.getData('id');
+      const droppedAt = t.getData('droppedAt') || 0;
       if (typeof tokenId === 'number') {
+        // 무적 시간(1초) 체크
+        if (droppedAt && Date.now() - droppedAt < 1000) return;
         // 서버에 토큰 먹기 알림
         this.socket.emit('collectToken', { roomId: this.roomId, tokenId });
         // 내 토큰 카운트만 증가
@@ -405,6 +413,29 @@ class RedLightGreenLightScene extends Phaser.Scene {
             }
         });
         this.physics.overlap(mySprite, this.tokens, this.handleCollectToken, undefined, this);
+
+        // 토큰 움직임/무적 시간 처리
+        this.tokens.getChildren().forEach((tokenSprite) => {
+            const t = tokenSprite as Phaser.Physics.Arcade.Sprite;
+            if (!t.active) return;
+            const droppedAt = t.getData('droppedAt') || 0;
+            const moving = t.getData('moving');
+            let vx = t.getData('vx') || 0;
+            let vy = t.getData('vy') || 0;
+            if (moving && Date.now() - droppedAt < 1000) {
+                // 1초간 속도 적용 (마찰감소)
+                vx *= 0.96;
+                vy *= 0.96;
+                t.x += vx * (delta / 1000);
+                t.y += vy * (delta / 1000);
+                t.setData('vx', vx);
+                t.setData('vy', vy);
+            } else if (moving) {
+                t.setData('vx', 0);
+                t.setData('vy', 0);
+                t.setData('moving', false);
+            }
+        });
     }
 
     // moveYounghee 제거 (서버 동기화로 대체)
@@ -463,7 +494,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
 
     // 제한 시간 및 phase 상태 추가
     const [phase, setPhase] = useState<'waiting' | 'dead' | 'survived' | 'playing'>('waiting');
-    const [timer, setTimer] = useState(10);
+    const [timer, setTimer] = useState(100);
     const [tokenCount, setTokenCount] = useState(0);
     const [showAlphabetModal, setShowAlphabetModal] = useState(false);
     const [invincibleUntil, setInvincibleUntil] = useState(0);
@@ -577,7 +608,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     // phase가 바뀔 때마다 타이머/토큰 초기화 (dead->waiting 등)
     useEffect(() => {
         if (phase === 'waiting') {
-            setTimer(10);
+            setTimer(100);
             setTokenCount(0);
         }
     }, [phase]);
