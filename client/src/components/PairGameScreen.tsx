@@ -314,10 +314,8 @@ const GameScreen = () => {
       setGameResult(result);
       setSurvivors(newSurvivors || []);
       if (result === 'died') {
-        setTimeout(() => {
-          getSocket().disconnect();
-          window.location.href = '/';
-        }, 1500);
+        getSocket().disconnect();
+        window.location.href = '/';
       }
     };
 

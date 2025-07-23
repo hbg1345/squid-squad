@@ -117,12 +117,12 @@ class RedLightGreenLightScene extends Phaser.Scene {
         // this.cameras.main.setBackgroundColor('#F0F0F0');
 
         // 1. Current Survivors Display
-        this.survivorText = this.add.text(this.scale.width / 2, 50, '현재 생존자: 0/0', {
-            fontSize: '32px',
-            color: '#000000',
-            fontFamily: 'Arial, sans-serif',
-            fontStyle: 'bold'
-        }).setOrigin(0.5).setScrollFactor(0); // Center horizontally, fixed to screen
+        // this.survivorText = this.add.text(this.scale.width / 2, 50, '현재 생존자: 0/0', {
+        //     fontSize: '32px',
+        //     color: '#000000',
+        //     fontFamily: 'Arial, sans-serif',
+        //     fontStyle: 'bold'
+        // }).setOrigin(0.5).setScrollFactor(0); // Center horizontally, fixed to screen
 
         // 2. Younghee (Doll) Implementation
         // Initial Younghee position (randomized later)
@@ -202,7 +202,9 @@ class RedLightGreenLightScene extends Phaser.Scene {
             // 생존자 수 표시 (size → Object.keys(...).length)
             const survivorCount = data.players ? Object.keys(data.players).length : 0;
             const totalCount = data.totalPlayers || survivorCount;
-            this.survivorText.setText(`현재 생존자: ${survivorCount}/${totalCount}`);
+            if (typeof window !== 'undefined' && (window as any).setSurvivorText) {
+              (window as any).setSurvivorText(`현재 생존자: ${survivorCount}/${totalCount}`);
+            }
             // 내 tokenCount를 서버 값으로 갱신
             if (data.players && data.players[this.myId] && this.setTokenCount) {
                 this.setTokenCount(data.players[this.myId].tokenCount || 0);
@@ -499,9 +501,18 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     const [isDescribing, setIsDescribing] = useState(true);
     const [isGameStarted, setIsGameStarted] = useState(false);
 
+    // 1. React state 추가
+    const [survivorText, setSurvivorText] = useState('');
+
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const lastYoungheeUpdateRef = useRef<number | null>(null);
     const [_, forceRerender] = useState(0); // 오디오 ref 갱신용
+
+    // 2. window 콜백 등록
+    useEffect(() => {
+      (window as any).setSurvivorText = setSurvivorText;
+      return () => { delete (window as any).setSurvivorText; };
+    }, []);
 
     // 모달 표시 및 준비 완료 신호 전송
     useEffect(() => {
@@ -746,13 +757,26 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     // 타이머 UI
     const timerUI = phase === 'waiting' && (
         <div style={{
-            position: 'fixed', top: 32, left: '50%', transform: 'translateX(-50%)',
-            fontSize: timer <= 3 ? 100 : 32, color: '#fff', fontWeight: 'bold', zIndex: 1000,
+            position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
+            fontSize: timer <= 3 ? 100 : 32, color: '#fff', fontWeight: 'bold', zIndex: 9999,
             textShadow: '0 0 32px #000, 0 0 8px #000',
             pointerEvents: 'none',
             transition: 'font-size 0.2s cubic-bezier(0.4,1.4,0.6,1)',
         }}>
             {timer > 0 ? timer.toFixed(2) : '0.00'}
+        </div>
+    );
+
+    // 생존자 수 UI
+    // React survivorUI에서 해당 state 사용
+    const survivorUI = phase === 'waiting' && (
+        <div style={{
+            position: 'fixed', top: 60, left: '50%', transform: 'translateX(-50%)',
+            fontSize: 24, color: '#000', fontWeight: 'bold', zIndex: 1000,
+            background: 'rgba(255,255,255,0.7)', borderRadius: 8, padding: '4px 24px',
+            pointerEvents: 'none',
+        }}>
+            {survivorText}
         </div>
     );
 
@@ -776,6 +800,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
                 </div>
             )}
             {timerUI}
+            {survivorUI}
             {/* 채팅창 */}
             {roomId && (
                 <ChatBox 
