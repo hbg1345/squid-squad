@@ -92,7 +92,7 @@ const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, all
           }
         });
         
-        this.add.text(this.cameras.main.width / 2, 50, `Room ${roomIndex + 1}`, { fontSize: '32px' }).setOrigin(0.5);
+        this.add.text(this.cameras.main.width / 2, 50, `Room ${roomIndex + 1}`, { fontSize: '32px', color: '#111' }).setOrigin(0.5);
         this.add.text(this.cameras.main.width / 2, this.cameras.main.height - 50, `Press 'E' near the door to exit`, { fontSize: '24px' }).setOrigin(0.5);
 
         // --- 포탈 이미지 및 파티클 추가 ---
@@ -728,10 +728,13 @@ const GameScreen = () => {
       {/* Timer */}
       {(phase === 'waiting' || phase === 'playing') && isGameStarted && (
         <div style={{
-            position: 'fixed', top: 32, left: '50%', transform: 'translateX(-50%)',
-            fontSize: phase === 'waiting' && timer > 0 ? 100 : 48, 
-            color: '#fff', 
-            fontWeight: 'bold', 
+            position: 'fixed',
+            top: roomIndex !== null ? 70 : 32,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            fontSize: phase === 'waiting' && timer > 0 ? 100 : 48,
+            color: roomIndex !== null ? '#111' : '#fff',
+            fontWeight: 'bold',
             zIndex: 1000,
             transition: 'font-size 0.3s ease-out'
         }}>
