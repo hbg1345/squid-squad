@@ -348,13 +348,11 @@ class RedLightGreenLightScene extends Phaser.Scene {
 
                 if (dist <= requiredDist) {
                     collisionDetected = true;
-                    const dirs = [
-                        { dx: 0, dy: -1 }, // up
-                        { dx: 0, dy: 1 },  // down
-                        { dx: -1, dy: 0 }, // left
-                        { dx: 1, dy: 0 },  // right
-                    ];
-                    const dir = Phaser.Math.RND.pick(dirs);
+                    // 내 위치에서 상대 위치로 향하는 방향(단위 벡터)으로 밀침
+                    const dx = otherSprite.x - mySprite.x;
+                    const dy = otherSprite.y - mySprite.y;
+                    const len = Math.sqrt(dx * dx + dy * dy);
+                    const dir = len > 0 ? { dx: dx / len, dy: dy / len } : { dx: 1, dy: 0 };
                     this.socket.emit('playerPush', { id, dx: dir.dx, dy: dir.dy });
                 }
             });
