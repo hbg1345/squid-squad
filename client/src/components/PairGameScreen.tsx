@@ -31,9 +31,11 @@ type RoomScreenProps = {
   allPlayers: { [id: string]: PlayerState };
   roomIndex: number;
   isChattingRef: React.RefObject<boolean>;
+  doorQuotas: number[];
 };
 
-const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, allPlayers, roomIndex, isChattingRef }, ref) => {
+const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, allPlayers, roomIndex, isChattingRef, doorQuotas }, ref) => {
+  console.log('[RoomScreen] 렌더링됨, doorQuotas:', doorQuotas, 'roomIndex:', roomIndex);
   const phaserRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const allPlayersRef = useRef(allPlayers);
@@ -48,6 +50,11 @@ const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, all
       interactKey!: Phaser.Input.Keyboard.Key;
       graphics!: Phaser.GameObjects.Graphics;
       pushKey!: Phaser.Input.Keyboard.Key;
+      portalImg!: Phaser.GameObjects.Image;
+      particle1!: Phaser.GameObjects.Image;
+      particle2!: Phaser.GameObjects.Image;
+      particle3!: Phaser.GameObjects.Image;
+      quotaText!: Phaser.GameObjects.Text;
 
       preload() {
         this.load.image('player', '/player.png');
@@ -57,9 +64,14 @@ const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, all
         this.load.image('player5', '/player5.png');
         this.load.image('background2', '/background2.png');
         this.load.image('roomBg', '/room.png');
+        this.load.image('portal', '/Portal.png');
+        this.load.image('particle1', '/Particle Effect 1.png');
+        this.load.image('particle2', '/Particle Effect 2.png');
+        this.load.image('particle3', '/Particle Effect 3.png');
       }
 
       create() {
+        console.log('[RoomScene] create 호출됨');
         // Add room background image, stretched to fill
         this.add.image(this.cameras.main.width / 2, this.cameras.main.height / 2, 'roomBg')
           .setOrigin(0.5)
@@ -81,13 +93,22 @@ const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, all
         
         this.add.text(this.cameras.main.width / 2, 50, `Room ${roomIndex + 1}`, { fontSize: '32px' }).setOrigin(0.5);
         this.add.text(this.cameras.main.width / 2, this.cameras.main.height - 50, `Press 'E' near the door to exit`, { fontSize: '24px' }).setOrigin(0.5);
+
+        // --- 포탈 이미지 및 파티클 추가 ---
+        const centerX = this.cameras.main.width / 2;
+        const centerY = this.cameras.main.height / 2;
+        this.portalImg = this.add.image(centerX, centerY, 'portal').setOrigin(0.5).setScale(2);
+        this.particle1 = this.add.image(centerX, centerY, 'particle1').setOrigin(0.5).setScale(2.1);
+        this.particle2 = this.add.image(centerX, centerY, 'particle2').setOrigin(0.5).setScale(2.1);
+        this.particle3 = this.add.image(centerX, centerY, 'particle3').setOrigin(0.5).setScale(2.1);
+        this.quotaText = this.add.text(centerX, centerY - 70, '', { fontSize: '18px', color: '#fff', align: 'center' }).setOrigin(0.5);
       }
       
       update(time: number, delta: number) {
+        console.log('[RoomScene] update 호출됨');
         const dt = delta / 1000;
         const centerX = this.cameras.main.width / 2;
         const centerY = this.cameras.main.height / 2;
-        
         const myRoomPlayer = allPlayersRef.current[myId!];
         
         // Push logic
@@ -140,19 +161,27 @@ const RoomScreen = forwardRef<any, RoomScreenProps>(({ onExit, myId, roomId, all
               const len = Math.sqrt(dx * dx + dy * dy);
               const newX = myRoomPlayer.x + (dx/len) * PLAYER_MOVE_SPEED * dt;
               const newY = myRoomPlayer.y + (dy/len) * PLAYER_MOVE_SPEED * dt;
-              socket.emit('game2Input', { roomId, input: { x: newX, y: newY } });
+              getSocket().emit('game2Input', { roomId, input: { x: newX, y: newY } });
             }
           }
         }
         
         // Rendering
         this.graphics.clear();
-        
-        // Draw center door
-        this.graphics.fillStyle(0x0000ff, 1);
-        this.graphics.fillRect(centerX - DOOR_WIDTH / 2, centerY - DOOR_HEIGHT / 2, DOOR_WIDTH, DOOR_HEIGHT);
-
+        // --- 포탈 파티클 반짝임 애니메이션 ---
+        if (this.particle1 && this.particle2 && this.particle3) {
+          const t = time / 1000;
+          this.particle1.setAlpha(0.5 + 0.5 * Math.sin(t * 2));
+          this.particle2.setAlpha(0.5 + 0.5 * Math.sin(t * 2.5 + 1));
+          this.particle3.setAlpha(0.5 + 0.5 * Math.sin(t * 3 + 2));
+        }
+        // --- 인원/쿼터 텍스트 ---
         const roomPlayers = Object.entries(allPlayersRef.current).filter(([_, p]) => p.roomIndex === roomIndex);
+        const requiredQuota = doorQuotas[roomIndex] ?? '?';
+        const text = `${roomPlayers.length}/${requiredQuota}`;
+        if (this.quotaText) {
+          this.quotaText.setText(text);
+        }
 
         roomPlayers.forEach(([id, info]) => {
           if (!this.playerSprites[id]) {
@@ -374,6 +403,7 @@ const GameScreen = () => {
       }
 
       create() {
+        console.log('[PairScene] create 호출됨');
         // Add background2 image, stretched to fill
         this.add.image(this.cameras.main.width / 2, this.cameras.main.height / 2, 'background2')
           .setOrigin(0.5)
@@ -402,6 +432,7 @@ const GameScreen = () => {
       }
 
       update(time: number, delta: number) {
+        console.log('[PairScene] update 호출됨');
         const dt = delta / 1000;
         const mainCam = this.cameras.main;
         const centerX = mainCam.width / 2;
@@ -695,6 +726,7 @@ const GameScreen = () => {
           roomId={roomId}
           allPlayers={allPlayers}
           isChattingRef={isChattingRef}
+          doorQuotas={doorQuotas}
         />
       }
     </div>
