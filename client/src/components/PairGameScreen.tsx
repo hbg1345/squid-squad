@@ -253,7 +253,7 @@ const GameScreen = () => {
   
   const [mainTimer, setMainTimer] = useState(20);
   const [gameResult, setGameResult] = useState<'survived' | 'died' | null>(null);
-  const [survivors, setSurvivors] = useState<{ id: string, nickname: string }[]>([]);
+  const [survivors, setSurvivors] = useState<{ id: string, nickname: string, character?: string }[]>([]);
   const [isChatting, setIsChatting] = useState(false);
   const isChattingRef = useRef(isChatting);
   useEffect(() => {
@@ -650,13 +650,41 @@ const GameScreen = () => {
             <h2 style={{ fontSize: '28px', marginBottom: '20px', borderBottom: '2px solid #555', paddingBottom: '10px' }}>
               생존자 목록
             </h2>
-            <ul style={{ listStyle: 'none', padding: 0 }}>
-              {survivors.map((survivor) => (
-                <li key={survivor.id} style={{ fontSize: '22px', marginBottom: '10px' }}>
-                  {survivor.nickname}
-                </li>
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '40px', marginTop: 32
+            }}>
+              {survivors.map((survivor, idx) => (
+                <div key={survivor.id} style={{
+                  width: 100, height: 100,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  position: 'relative'
+                }}>
+                  {/* 마름모꼴 타일 */}
+                  <div style={{
+                    width: 70, height: 70,
+                    background: 'linear-gradient(135deg, #ffe0f0 60%, #ffb6e6 100%)',
+                    transform: 'rotate(45deg)',
+                    position: 'absolute', top: 15, left: 15, zIndex: 1
+                  }} />
+                  {/* 캐릭터 이미지 */}
+                  <img
+                    src={`/${(survivor.character || 'player.png').replace('.png', '')}.png`}
+                    alt={survivor.nickname}
+                    style={{
+                      width: 60, height: 60,
+                      objectFit: 'contain',
+                      position: 'relative', zIndex: 2, marginTop: 20
+                    }}
+                  />
+                  {/* 닉네임 */}
+                  <div style={{
+                    marginTop: 10, fontSize: 18, color: '#fff', fontWeight: 'bold', zIndex: 3
+                  }}>
+                    {survivor.nickname}
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         )}
         <button

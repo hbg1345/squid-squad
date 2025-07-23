@@ -419,7 +419,7 @@ setInterval(() => {
           // Build the list of survivor details ONCE.
           const survivorDetails = Object.entries(room.players)
               .filter(([id, player]) => successfulRooms.has(player.roomIndex))
-              .map(([id, player]) => ({ id, nickname: player.nickname }));
+              .map(([id, player]) => ({ id, nickname: player.nickname, character: player.character }));
 
           // Emit results to all players
           Object.entries(room.players).forEach(([id, player]) => {

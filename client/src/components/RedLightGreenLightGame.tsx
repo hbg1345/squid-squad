@@ -6,6 +6,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import AlphabetModal from './AlphabetModal';
 import ChatBox from './ChatBox';
 import GameDescriptionModal from './GameDescriptionModal';
+import { WAIT_TIME } from '../constants/game';
 
 // Vite 환경변수 타입 선언 (없으면 추가)
 declare global {
@@ -489,7 +490,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
 
     // 제한 시간 및 phase 상태 추가
     const [phase, setPhase] = useState<'waiting' | 'dead' | 'survived' | 'playing'>('waiting');
-    const [timer, setTimer] = useState(100);
+    const [timer, setTimer] = useState(WAIT_TIME);
     const [tokenCount, setTokenCount] = useState(0);
     const [showAlphabetModal, setShowAlphabetModal] = useState(false);
     const [invincibleUntil, setInvincibleUntil] = useState(0);
@@ -607,7 +608,7 @@ const RedLightGreenLightGame: React.FC<RedLightGreenLightGameProps> = ({ onGoBac
     // phase가 바뀔 때마다 타이머/토큰 초기화 (dead->waiting 등)
     useEffect(() => {
         if (phase === 'waiting') {
-            setTimer(100);
+            setTimer(WAIT_TIME);
             setTokenCount(0);
         }
     }, [phase]);
