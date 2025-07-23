@@ -172,13 +172,14 @@ io.on('connection', (socket) => {
     // 같은 roomId에 join된 모든 유저에게 메시지 전송
     io.to(roomId).emit('chat', { roomId, nickname, message, time });
   });
+  // 연결이 끊긴 경우 해당 플레이어를 모든 방에서 제거
   socket.on('disconnect', () => {
-    // 모든 방에서 플레이어 제거
-    Object.entries(rooms).forEach(([roomId, room]) => {
-      if (room.players[socket.id]) {
+    Object.values(rooms).forEach(room => {
+      if (room.players && room.players[socket.id]) {
         delete room.players[socket.id];
-        delete room.playerInputs[socket.id];
-        broadcastGameState(roomId);
+      }
+      if (room.readyPlayers && room.readyPlayers.has(socket.id)) {
+        room.readyPlayers.delete(socket.id);
       }
     });
     waitingPlayers = waitingPlayers.filter(s => s !== socket);
