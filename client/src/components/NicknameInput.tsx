@@ -35,6 +35,19 @@ const NicknameInput: React.FC = () => {
     }, [showMatchingModal]);
 
     useEffect(() => {
+        let timer: number | null = null;
+        if (showMatchingModal) {
+            setElapsed(0); // 매칭 시작 시 0초로 초기화
+            timer = window.setInterval(() => {
+                setElapsed(prev => prev + 1);
+            }, 1000);
+        }
+        return () => {
+            if (timer !== null) window.clearInterval(timer);
+        };
+    }, [showMatchingModal]);
+
+    useEffect(() => {
         const handleMatchingCount = (count: number) => setMatchingCurrent(count);
         const handleMatchFound = ({ roomId }: { roomId: string }) => {
             setShowMatchingModal(false);
